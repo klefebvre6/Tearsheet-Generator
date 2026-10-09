@@ -64,7 +64,9 @@ def test_yq_imports_with_temporary_fixture_csv(yq_fixture_csv: Path, monkeypatch
     assert len(str(layout)) > 500
 
 
-def test_yq_production_port_remains_8303() -> None:
-    """Contract check: Y&Q bind port is still hardcoded at 8303."""
+def test_yq_production_bind_is_loopback_without_debug() -> None:
+    """Y&Q production start is loopback-only, debug off, and exposes /healthz."""
     source = YQ_MODULE_PATH.read_text(encoding="utf-8")
-    assert "app.run(debug=True, port=8303)" in source
+    assert 'app.run(debug=False, use_reloader=False, host="127.0.0.1", port=8303)' in source
+    assert '@app.server.route("/healthz")' in source
+    assert "app.run(debug=True, port=8303)" not in source

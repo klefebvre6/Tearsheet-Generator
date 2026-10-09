@@ -2128,5 +2128,13 @@ def show_main(n_clicks):
         return {"display": "none"}, {"display": "block"}
     return tsd.GATE_SCREEN_STYLE, {"display": "none"}
 
+@app.server.route("/healthz")
+def yq_healthz():
+    """Loopback readiness probe. No financial payload."""
+    from flask import jsonify
+    return jsonify(app="yq", status="ok")
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=8303)
+    # VPS and any other production start stay on loopback with the reloader off.
+    app.run(debug=False, use_reloader=False, host="127.0.0.1", port=8303)
