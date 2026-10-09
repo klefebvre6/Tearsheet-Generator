@@ -52,6 +52,8 @@ PUBLIC_CARD_CLASS = "mb-4 tcp-public-card"
 DESKTOP_TWO_COLUMN_ROW_CLASS = "mb-2 tcp-two-column-row"
 MONTHLY_PERFORMANCE_CLASS = "table-responsive tcp-monthly-performance"
 NAV_CHART_CONTAINER_CLASS = "tcp-nav-chart-container"
+COMPARISON_CHART_CONTAINER_CLASS = "tcp-nav-chart-container tcp-comparison-chart-container"
+COMPARISON_CHART_TITLE_PLAIN = "Growth of $50,000 Since Inception"
 PREVIEW_BANNER_CLASS = "text-center fw-bold tcp-preview-banner"
 MODE_ALERT_CLASS = "tcp-mode-alert"
 DAILY_METRICS_TABLE_CLASS = "fixed-cols tcp-daily-metrics-table"
@@ -215,6 +217,7 @@ def mobile_responsive_contract() -> Dict[str, str]:
         "drawdown_table": DRAWDOWN_TABLE_CLASS,
         "drawdown_section": DRAWDOWN_SECTION_CLASS,
         "nav_chart_container": NAV_CHART_CONTAINER_CLASS,
+        "comparison_chart_container": COMPARISON_CHART_CONTAINER_CLASS,
         "two_column_row": DESKTOP_TWO_COLUMN_ROW_CLASS,
         "disclosure_panel": "tcp-public-disclosure-panel",
         "daily_values_section": "tcp-daily-values-section",
@@ -252,6 +255,7 @@ def desktop_visual_contract() -> Dict[str, str]:
         "public_card": PUBLIC_CARD_CLASS,
         "monthly_performance": MONTHLY_PERFORMANCE_CLASS,
         "nav_chart_container": NAV_CHART_CONTAINER_CLASS,
+        "comparison_chart_container": COMPARISON_CHART_CONTAINER_CLASS,
         "preview_banner": PREVIEW_BANNER_CLASS,
         "daily_metrics_table": DAILY_METRICS_TABLE_CLASS,
         "drawdown_table": DRAWDOWN_TABLE_CLASS,
@@ -783,6 +787,53 @@ def build_nav_footnotes() -> List[Any]:
             id="tcp-nav-footnote-secondary",
         ),
     ]
+
+
+def build_comparison_chart_block(figure: Any, bundle: Any) -> html.Div:
+    """Public Growth of $50,000 chart plus cutoff / stale disclosure."""
+    stale_children: List[Any] = []
+    for index, notice in enumerate(getattr(bundle, "stale_notices", ()) or ()):
+        stale_children.append(
+            html.P(
+                notice,
+                className="text-center small text-muted tcp-comparison-stale-notice",
+                id=f"tcp-comparison-stale-notice-{index}",
+            )
+        )
+    return html.Div(
+        [
+            html.Div(
+                dcc.Graph(
+                    id="tcp-comparison-graph",
+                    figure=figure,
+                    config={"displayModeBar": False, "responsive": True},
+                    style={"width": "100%", "maxWidth": "100%", "maxHeight": "400px", "pageBreakInside": "avoid"},
+                ),
+                className=COMPARISON_CHART_CONTAINER_CLASS,
+                id="tcp-comparison-chart-container",
+            ),
+            html.P(
+                getattr(bundle, "cutoff_label", "Comparison data unavailable."),
+                className="text-center small",
+                id="tcp-comparison-cutoff",
+            ),
+            html.P(
+                getattr(
+                    bundle,
+                    "disclosure",
+                    "BTC and ETH are normalized to the same $50,000 starting value as one TCP "
+                    "tranche for comparative purposes. Benchmark performance does not represent "
+                    "an investment by TCP.",
+                ),
+                className="text-center small",
+                style={"marginBottom": "3rem"},
+                id="tcp-comparison-disclosure",
+            ),
+            html.Div(stale_children, id="tcp-comparison-stale-notices"),
+        ],
+        id="tcp-comparison-section",
+        className=PUBLIC_SECTION_CLASS,
+    )
 
 
 def build_public_disclosure_panel() -> dbc.Row:

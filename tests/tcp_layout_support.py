@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import socket
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Any, Iterator
 from unittest.mock import patch
 
@@ -26,7 +27,9 @@ TCP_LAYOUT_TEST_MODULES = frozenset(
         "test_tcp_public_shell.py",
         "test_tcp_access_daily_values.py",
         "test_tcp_admin_mutation_state.py",
-        "test_tcp_benchmarks.py",
+        # Unit tests in this module use MockBenchmarkProvider through
+        # load_spxtr_benchmark; the file-wide fetch guard would block them.
+        # The layout_text fixture applies its own patches.
         "test_tcp_drawdown.py",
         "test_tcp_mobile_responsive.py",
         "test_tcp_layout_overlap_fixes.py",
@@ -61,7 +64,7 @@ def deterministic_benchmark_result(
         symbol=symbol,
         display_name=display_name,
         as_of=series.index[-1].strftime("%Y-%m-%d"),
-        fetched_at="2026-01-01T00:00:00+00:00",
+        fetched_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         returns=series,
         warning=None,
     )

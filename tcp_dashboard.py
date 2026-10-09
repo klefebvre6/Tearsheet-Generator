@@ -364,6 +364,61 @@ def build_tcp_nav_figure(
     return fig
 
 
+BTC_LINE_COLOR = "#F7931A"
+ETH_LINE_COLOR = "#627EEA"
+
+
+def build_tcp_comparison_figure(bundle: Any) -> go.Figure:
+    """Growth-of-$50,000 TCP/BTC/ETH figure. Does not touch ledger math."""
+    from tcp_comparison import COMPARISON_TITLE
+
+    frame = getattr(bundle, "frame", None)
+    fig = go.Figure()
+    if frame is None or frame.empty:
+        fig.add_annotation(
+            text="Comparison data unavailable",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+        )
+    else:
+        traces = (
+            ("TCP", PRIMARY_COLOR, 2.4),
+            ("BTC", BTC_LINE_COLOR, 2.0),
+            ("ETH", ETH_LINE_COLOR, 2.0),
+        )
+        for name, color, width in traces:
+            if name not in frame.columns or frame[name].dropna().empty:
+                continue
+            fig.add_trace(
+                go.Scatter(
+                    x=frame.index,
+                    y=frame[name],
+                    mode="lines",
+                    name=name,
+                    line={"color": color, "width": width},
+                    hovertemplate="Date=%{x|%Y-%m-%d}<br>" + name + "=$%{y:,.2f}<extra></extra>",
+                )
+            )
+    fig.update_layout(
+        title={"text": COMPARISON_TITLE, "x": 0.5, "xanchor": "center"},
+        template="ggplot2",
+        plot_bgcolor=GREY_BG,
+        paper_bgcolor=WHITE_BG,
+        xaxis_title="Date",
+        yaxis_title="Value",
+        autosize=True,
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "center", "x": 0.5},
+        margin={"l": 48, "r": 12, "t": 56, "b": 36},
+        hovermode="x unified",
+    )
+    fig.update_xaxes(showgrid=True, automargin=True, tickangle=-25)
+    fig.update_yaxes(showgrid=True, automargin=True, tickprefix="$", tickformat=",.0f")
+    return fig
+
+
 def _format_label_date(row_date: date) -> str:
     return f"{row_date.strftime('%B %d, %Y')}{LABEL_DATE_SUFFIX}"
 

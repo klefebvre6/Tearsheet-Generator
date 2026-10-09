@@ -78,6 +78,7 @@ from tcp_benchmarks import (
     DEFAULT_CACHE_FILENAME,
     ETH_DISPLAY_NAME,
     ETH_SYMBOL,
+    SPXTR_SYMBOL,
     benchmark_status_message,
     load_btc_benchmark,
     load_btc_benchmark_cache_only,
@@ -85,9 +86,12 @@ from tcp_benchmarks import (
     load_eth_benchmark_cache_only,
     load_spxtr_benchmark,
     load_spxtr_benchmark_cache_only,
+    resolve_runtime_benchmark,
 )
+from tcp_comparison import build_normalized_comparison_bundle
 from tcp_dashboard import (
     GREY_BG,
+    build_tcp_comparison_figure,
     build_tcp_current_data_labels,
     propagate_tcp_dashboard,
 )
@@ -120,6 +124,7 @@ from tcp_public_sections import (
     build_inline_performance_disclaimers,
     build_drawdown_profile_card,
     build_investor_information,
+    build_comparison_chart_block,
     build_nav_footnotes,
     build_public_disclosure_panel,
     build_public_footer,
@@ -367,16 +372,14 @@ def _resolve_drawdown_benchmark(
     load_live,
     load_cache_only,
 ) -> BenchmarkResult:
-    cache = runtime_holder.setdefault("drawdown_benchmarks", {})
-    existing = cache.get(symbol)
-    if isinstance(existing, BenchmarkResult):
-        return existing
-    if _skip_benchmark_fetch():
-        result = load_cache_only(cache_path=cache_path)
-    else:
-        result = load_live(cache_path=cache_path)
-    cache[symbol] = result
-    return result
+    return resolve_runtime_benchmark(
+        runtime_holder,
+        symbol=symbol,
+        cache_path=cache_path,
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        skip_fetch=_skip_benchmark_fetch(),
+    )
 
 
 def _resolve_btc_benchmark_result(runtime_holder: Dict[str, Any]) -> BenchmarkResult:
@@ -427,16 +430,23 @@ def _unavailable_benchmark_result() -> BenchmarkResult:
 
 
 def _resolve_benchmark_result(runtime_holder: Dict[str, Any]) -> BenchmarkResult:
-    existing = runtime_holder.get("benchmark")
-    if isinstance(existing, BenchmarkResult):
-        return existing
-    cache_path = _benchmark_cache_path()
-    if _skip_benchmark_fetch():
-        result = load_spxtr_benchmark_cache_only(cache_path=cache_path)
-    else:
-        result = load_spxtr_benchmark(cache_path=cache_path)
-    runtime_holder["benchmark"] = result
-    return result
+    return resolve_runtime_benchmark(
+        runtime_holder,
+        symbol=SPXTR_SYMBOL,
+        cache_path=_benchmark_cache_path(),
+        load_live=load_spxtr_benchmark,
+        load_cache_only=load_spxtr_benchmark_cache_only,
+        skip_fetch=_skip_benchmark_fetch(),
+        result_key="benchmark",
+    )
+
+
+def _comparison_bundle(records: List[Dict[str, Any]], runtime_holder: Dict[str, Any]):
+    return build_normalized_comparison_bundle(
+        records,
+        _resolve_btc_benchmark_result(runtime_holder),
+        _resolve_eth_benchmark_result(runtime_holder),
+    )
 
 
 def _benchmark_notice_component(result: BenchmarkResult) -> html.Div:
@@ -451,16 +461,24 @@ def _benchmark_notice_component(result: BenchmarkResult) -> html.Div:
     return dbc.Alert(message, color=alert_color, className=benchmark_notice_class(result.status))
 
 
-def build_preview_layout(cfg: TCPConfig, state: PreviewState, benchmark_result: BenchmarkResult) -> html.Div:
+def build_preview_layout(
+    cfg: TCPConfig,
+    state: PreviewState,
+    benchmark_result: BenchmarkResult,
+    runtime_holder: Optional[Dict[str, Any]] = None,
+) -> html.Div:
     snapshot = state.snapshot
     assert snapshot is not None
+    holder = runtime_holder if runtime_holder is not None else {}
     meta = snapshot.ledger.metadata
     first_completed = meta.first_completed_date.strftime("%B %d, %Y") if meta.first_completed_date else "—"
     propagation = _propagate_with_drawdown_benchmarks(
         snapshot.canonical_nav,
-        {},
+        holder,
         benchmark_result,
     )
+    comparison_bundle = _comparison_bundle(snapshot.canonical_nav, holder)
+    comparison_figure = build_tcp_comparison_figure(comparison_bundle)
     mode_alert = (
         "JSON state is authoritative. Authenticated Add/Delete persist to preview JSON."
         if cfg.persistence_enabled and snapshot.data_source == "json"
@@ -556,6 +574,7 @@ def build_preview_layout(cfg: TCPConfig, state: PreviewState, benchmark_result: 
                     id="tcp-nav-chart-container",
                 ),
                 *build_nav_footnotes(),
+                build_comparison_chart_block(comparison_figure, comparison_bundle),
                 html.H5("Performance Summary", className="text-center mb-2"),
                 html.Div(_monthly_table_component(propagation.monthly_calendar), id="monthly-calendar-container"),
                 build_two_column_shell_row(
@@ -959,6 +978,9 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
         Output("tcp-benchmark-notice", "children"),
         Output("data-current-label-desktop", "children"),
         Output("data-current-label-mobile", "children"),
+        Output("tcp-comparison-graph", "figure"),
+        Output("tcp-comparison-cutoff", "children"),
+        Output("tcp-comparison-stale-notices", "children"),
         Input("canonical-nav-store", "data"),
         Input("benchmark-store", "data"),
     )
@@ -974,6 +996,15 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
             runtime_holder,
             benchmark_result,
         )
+        comparison_bundle = _comparison_bundle(records, runtime_holder)
+        stale_children = [
+            html.P(
+                notice,
+                className="text-center small text-muted tcp-comparison-stale-notice",
+                id=f"tcp-comparison-stale-notice-{index}",
+            )
+            for index, notice in enumerate(comparison_bundle.stale_notices)
+        ]
         return (
             propagation.nav_figure,
             _monthly_table_component(propagation.monthly_calendar),
@@ -982,6 +1013,9 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
             _benchmark_notice_component(benchmark_result),
             _desktop_label_children(propagation.desktop_label.header, propagation.desktop_label.date_line),
             _mobile_label_children(propagation.mobile_label.header, propagation.mobile_label.date_line),
+            build_tcp_comparison_figure(comparison_bundle),
+            comparison_bundle.cutoff_label,
+            stale_children,
         )
 
 
@@ -1379,7 +1413,7 @@ def create_app(
             live_snap = runtime_holder.get("snapshot") or state.snapshot
             live_state = PreviewState(snapshot=live_snap)
             live_benchmark = _resolve_benchmark_result(runtime_holder)
-            return build_preview_layout(cfg, live_state, live_benchmark)
+            return build_preview_layout(cfg, live_state, live_benchmark, runtime_holder)
 
         app.layout = _tcp_live_layout
         _register_access_callbacks(app, auth_manager, runtime_holder, export_filename=cfg.export_filename)

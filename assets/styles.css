@@ -538,7 +538,8 @@ body, #page-container {
 }
 
 #nav-preview-graph,
-#NAV-graph {
+#NAV-graph,
+#tcp-comparison-graph {
   width: 100% !important;
   height: auto !important;
   min-height: 320px;
@@ -833,12 +834,14 @@ body,
   }
 
   #nav-preview-graph,
-  #NAV-graph {
+  #NAV-graph,
+  #tcp-comparison-graph {
     min-height: 260px;
     max-height: 360px;
   }
 
-  .tcp-nav-chart-container {
+  .tcp-nav-chart-container,
+  .tcp-comparison-chart-container {
     width: 100%;
     max-width: 100%;
   }

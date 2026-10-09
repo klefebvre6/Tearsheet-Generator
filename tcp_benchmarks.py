@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from copy import deepcopy
 from dataclasses import dataclass
@@ -116,8 +117,56 @@ class BenchmarkResult:
         )
 
 
-def _utc_now_iso() -> str:
+def _utc_now_iso(now: Optional[Callable[[], datetime]] = None) -> str:
+    current = now() if now is not None else datetime.now(timezone.utc)
+    if isinstance(current, datetime):
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=timezone.utc)
+        return current.replace(microsecond=0).isoformat()
+    if isinstance(current, date):
+        return datetime(current.year, current.month, current.day, tzinfo=timezone.utc).isoformat()
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def calendar_date(now: Optional[Callable[[], datetime]] = None) -> date:
+    """Local/injected calendar date used by the daily TTL-on-access policy."""
+    current = now() if now is not None else datetime.now()
+    if isinstance(current, datetime):
+        return current.date()
+    if isinstance(current, date):
+        return current
+    return datetime.now().date()
+
+
+def parse_benchmark_day(value: Optional[str]) -> Optional[date]:
+    if not value:
+        return None
+    text = str(value).strip()
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
+    except ValueError:
+        try:
+            return date.fromisoformat(text[:10])
+        except ValueError:
+            return None
+
+
+@dataclass
+class RuntimeBenchmarkSlot:
+    """In-process daily TTL slot. Never writes TCP financial state."""
+
+    result: BenchmarkResult
+    last_attempt_date: date
+    last_success_date: Optional[date] = None
+
+
+_RUNTIME_LOCKS: Dict[str, threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_for(symbol: str) -> threading.Lock:
+    with _LOCKS_GUARD:
+        return _RUNTIME_LOCKS.setdefault(symbol, threading.Lock())
 
 
 def _series_as_of(series: pd.Series) -> Optional[str]:
@@ -394,7 +443,7 @@ def load_symbol_benchmark(
         series = normalize_provider_returns(raw, symbol)
         series = _validate_returns_series(series, symbol)
         snapshot = deepcopy(series)
-        fetched_at = _utc_now_iso()
+        fetched_at = _utc_now_iso(now)
         as_of = _series_as_of(snapshot)
         _write_cache_atomic(
             cache_path,
@@ -531,13 +580,84 @@ def load_eth_benchmark_cache_only(
 
 
 def benchmark_status_message(result: BenchmarkResult) -> Optional[str]:
+    name = result.display_name or "Benchmark"
     if result.status == BENCHMARK_STATUS_READY:
         if result.as_of:
-            return f"SPXTR source: {result.source}. Data as of {result.as_of}."
-        return f"SPXTR source: {result.source}."
+            return f"{name} source: {result.source}. Data as of {result.as_of}."
+        return f"{name} source: {result.source}."
     if result.status == BENCHMARK_STATUS_STALE:
         as_of = result.as_of or "unknown date"
-        return f"SPXTR benchmark data is stale (last successful as-of {as_of})."
+        return f"Benchmark data is stale; last successful data through {as_of}."
     if result.status == BENCHMARK_STATUS_UNAVAILABLE:
-        return result.warning or "SPXTR benchmark data is temporarily unavailable."
+        return result.warning or f"{name} benchmark data is temporarily unavailable."
     return None
+
+
+def resolve_runtime_benchmark(
+    runtime_holder: Dict[str, Any],
+    *,
+    symbol: str,
+    cache_path: Path,
+    load_live: Callable[..., BenchmarkResult],
+    load_cache_only: Callable[..., BenchmarkResult],
+    skip_fetch: bool = False,
+    now: Optional[Callable[[], datetime]] = None,
+    result_key: Optional[str] = None,
+) -> BenchmarkResult:
+    """Resolve one benchmark with a calendar-day TTL and a per-symbol lock.
+
+    Policy:
+    - At most one bounded network attempt per symbol per calendar day.
+    - A successful fetch already recorded today (memory or disk) is reused.
+    - A prior-day result triggers one refresh attempt.
+    - Failed refresh serves last-known-good cache as STALE.
+    - Unavailable data never raises; the TCP site keeps rendering.
+    - ``TCP_V2_SKIP_BENCHMARK_FETCH=1`` skips the network and still marks
+      prior-day disk cache STALE so freshness is not overstated.
+    """
+    today = calendar_date(now)
+    slots: Dict[str, RuntimeBenchmarkSlot] = runtime_holder.setdefault("benchmark_slots", {})
+
+    def _publish(result: BenchmarkResult) -> BenchmarkResult:
+        if result_key:
+            runtime_holder[result_key] = result
+        runtime_holder.setdefault("drawdown_benchmarks", {})[symbol] = result
+        return result
+
+    existing = slots.get(symbol)
+    if existing is not None and existing.last_attempt_date == today:
+        return _publish(existing.result)
+
+    with _lock_for(symbol):
+        existing = slots.get(symbol)
+        if existing is not None and existing.last_attempt_date == today:
+            return _publish(existing.result)
+
+        disk = load_cache_only(cache_path=cache_path)
+        disk_day = (
+            parse_benchmark_day(disk.fetched_at)
+            if disk.status != BENCHMARK_STATUS_UNAVAILABLE
+            else None
+        )
+        if skip_fetch:
+            if disk.status == BENCHMARK_STATUS_UNAVAILABLE:
+                result = disk
+            elif disk_day == today:
+                result = disk.with_status(BENCHMARK_STATUS_READY, warning=None)
+            else:
+                result = disk.with_status(
+                    BENCHMARK_STATUS_STALE,
+                    warning="Benchmark data is stale; showing last successful download.",
+                )
+        elif disk_day == today and disk.status != BENCHMARK_STATUS_UNAVAILABLE:
+            result = disk.with_status(BENCHMARK_STATUS_READY, warning=None)
+        else:
+            result = load_live(cache_path=cache_path, now=now)
+
+        success_date = today if result.status == BENCHMARK_STATUS_READY else parse_benchmark_day(result.fetched_at)
+        slots[symbol] = RuntimeBenchmarkSlot(
+            result=result,
+            last_attempt_date=today,
+            last_success_date=success_date,
+        )
+        return _publish(result)
