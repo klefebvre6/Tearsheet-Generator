@@ -116,9 +116,9 @@ C:\HC\apps\uploader\.venv\Scripts\python.exe -m pip install -r C:\HC\apps\upload
 
 TKP, YQ, and AGM `requirements.txt` files match that shared stack. The running services use `C:\HC\apps\shared\.venv310`, not a per-app virtual environment. TCP has no separate venv.
 
-### 5. Restore the persistent backup
+### 5. Restore the production data backup
 
-Choose the recovery timestamp under `C:\HC\backups\automatic`. Copy the JSON, CSV, workbook, and AGM data trees back into `C:\HC\data`. Copy `config` only as the on-disk reference. Copy `cloudflare\config.yml` to `C:\HC\deployment\cloudflare\live\config.yml`.
+Choose the recovery timestamp under `C:\HC\backups\automatic`. Copy the JSON, CSV, workbook, and AGM data trees back into `C:\HC\data`. Config restoration is step 7. Tunnel files are step 9.
 
 Restore the uploader database with the backup API, not a file copy:
 
@@ -145,13 +145,27 @@ Supply values from the password manager into `C:\HC\secrets` or the Apply proces
 | `HC-TCP-Public` account | `HC_SVC_HC_TEARSHEETS_PASSWORD` | Windows password for `.\svc_hc_tearsheets`. Apply input only |
 | Cloudflared | none in the environment | Credential file `C:\HC\secrets\cloudflare\hc-prod-vps01.json` (field `TunnelSecret`). Not an environment variable |
 
-The uploader token, the three Glenn ingest tokens, and the TCP admin and session secrets must be restored as the same values the healthy host is running. The installer compares designated secret files to the live service by equality and never prints the values.
+`DOWNSTREAM_INGEST_TOKEN` is operator-held and is not on disk. It is absent from `C:\HC\secrets`, from `C:\HC\config\uploader\uploader.env`, and from `C:\HC\backups\automatic`. `C:\HC\secrets\uploader\README.txt` records that it was not copied. Do not read that value back out of the live NSSM environment.
 
-`-Apply` will not read `DOWNSTREAM_INGEST_TOKEN` back out of the running service. Before Apply on a new host, set that variable in the Apply process, or put it in exactly one `C:\HC\secrets\*.env` file. Also set `HC_SVC_HC_TEARSHEETS_PASSWORD` in that process, and create the local account `svc_hc_tearsheets`.
+The TKP, TCP, and AGM ingest tokens, plus `TCP_V2_ADMIN_TOKEN` and `TCP_V2_SESSION_SECRET`, are restored from the designated secret files by variable name. The installer compares those files to a live service by equality and never prints the values.
+
+`-Apply` will not read `DOWNSTREAM_INGEST_TOKEN` back out of the running service. Before Apply on a new host, the operator supplies that variable in the Apply process, or places it in exactly one `C:\HC\secrets\*.env` file. Also set `HC_SVC_HC_TEARSHEETS_PASSWORD` in that process, and create the local account `svc_hc_tearsheets`.
 
 Create the account before the TCP service. The other services run as `LocalSystem`.
 
-### 7. Recreate services on the new host
+### 7. Restore canonical config from `C:\HC\config`
+
+Copy the backup's `config` tree to `C:\HC\config`. The canonical files are:
+
+- `C:\HC\config\uploader\uploader.env`
+- `C:\HC\config\tkp.env`
+- `C:\HC\config\tcp.env`
+- `C:\HC\config\yq.env`
+- `C:\HC\config\agm.env`
+
+These files match the live non-secret NSSM variables, including TCP ingest enabled, TCP `PYTHONPATH=C:\HC\apps\shared;C:\HC\apps\tcp`, and no `TCP_V2_SKIP_BENCHMARK_FETCH`. They omit every secret variable. NSSM does not load them. The service installer builds the environment from the catalog, then adds secret variables from `C:\HC\secrets` or the Apply process.
+
+### 8. Install production services on the new host
 
 Confirm the dry run first. It must not be given `-Apply`:
 
@@ -181,7 +195,9 @@ TKP and TCP call Flask `app.run` without an explicit host. Flask 3.0.3 defaults 
 
 Do not build the NSSM environment from `C:\HC\config\*.env` alone. Those files now match the live non-secret flags, including TCP ingest enabled and `PYTHONPATH`, and they still omit every secret variable. The installer adds the secret names from `C:\HC\secrets` or the Apply process environment.
 
-### 8. Restore the Cloudflare tunnel config
+The live `HC-TCP-Public` command line was read again from `HKLM\SYSTEM\CurrentControlSet\Services\HC-TCP-Public\Parameters` after the 2026-10-10 recycle. It is still `C:\HC\apps\shared\.venv310\Scripts\python.exe` with arguments `C:\HC\apps\tcp\tcp_ts_v2.py` and working directory `C:\HC\apps\tcp`. The NSSM python child uses that command and re-execs `C:\Python310\python.exe` with the same script. That re-exec owns `127.0.0.1:8302`. Uploader, TKP, YQ, and AGM follow the same venv re-exec pattern. Process ids change across recycles and are not part of the catalog. Leave the running service as it is.
+
+### 9. Configure the Cloudflare tunnel
 
 Restore `C:\HC\deployment\cloudflare\live\config.yml` and the credential file `C:\HC\secrets\cloudflare\hc-prod-vps01.json`. Do not change Cloudflare DNS in this procedure.
 
@@ -205,7 +221,7 @@ Ingress, then the default `http_status:404`:
 
 On a new host the installer creates this service with `sc.exe` only when `-Apply` is passed. Error control on the live service is ignore (`0`). The five Python services use normal (`1`).
 
-### 9. Verify loopback health
+### 10. Verify local health
 
 Run:
 
@@ -226,7 +242,7 @@ Loopback checks in that script:
 
 Each app port must have one listener, on `127.0.0.1` only. Uploader `/health` must report live export mode, dry run false, target production, and real writes enabled.
 
-### 10. Verify public health
+### 11. Verify public health
 
 The same health script checks the tunnel hostnames:
 
@@ -238,7 +254,7 @@ The same health script checks the tunnel hostnames:
 
 Public DNS is already pointed at this tunnel. Recovery does not change DNS records. A failed public check with a passing loopback check means the tunnel or ingress config, not the app bind.
 
-### 11. Verify the uploader database
+### 12. Verify the uploader database
 
 `verify-autostart.ps1` checks:
 
@@ -249,7 +265,7 @@ Public DNS is already pointed at this tunnel. Recovery does not change DNS recor
 
 The restore helper must already have printed `ok` for the backup API copy.
 
-### 12. Verify writer authority
+### 13. Verify TKP, TCP, and AGM writer authority
 
 Writer authority is the live environment, not the service display name.
 
@@ -269,9 +285,42 @@ Writer authority is the live environment, not the service display name.
 
 `verify-autostart.ps1` performs these checks and does not print token values.
 
-### 13. Verify Glenn can enter, save, and export
+### 14. Verify Glenn save and export readiness
 
-After the health script prints `PASS`, Glenn uses `https://uploader.hcresearch.ltd` and confirms a normal manual entry can be saved and exported. Export targets are TKP, TCP, and AGM. YQ is not an export target. Do not use a second host as a writer while this check is in progress. Exactly one host may accept ingest.
+Readiness is confirmed from the health checks. This step does not submit a login, save a new row, or perform an export.
+
+`verify-autostart.ps1` reads `http://127.0.0.1:8091/api/export/status` and the live export flags. Required readiness:
+
+- export mode live, dry run false, target production, real writes enabled
+- `EXPORT_ENABLED=true`, `EXPORT_DOWNSTREAM_ENABLED=true`, `EXPORT_INCLUDE_YQ=false`
+- ingest URLs set for TKP, TCP, and AGM
+- `YQ_INGEST_URL` unset
+- existing manual TKP history at `http://127.0.0.1:8091/api/rows/TKP?limit=1`
+
+Export targets are TKP, TCP, and AGM. YQ is excluded. Exactly one host may accept ingest.
+
+### 15. Verify the backup task and `verify-autostart.ps1`
+
+Confirm scheduled task `HC-Production-Backup` and the health script. Do not run the backup task as part of this check.
+
+Observed on HC-PROD-VPS01:
+
+- State Ready, enabled
+- Principal `SYSTEM`, logon `ServiceAccount`, run level Highest
+- Action `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\HC\deployment\backup\backup-hc-production.ps1`
+- Daily trigger, start boundary `2026-10-10T02:30:00`, interval 1 day
+- `StartWhenAvailable=true`, execution limit `PT2H`, multiple instances `IgnoreNew`
+- Last run `2026-10-10 12:19:06`, last result `0`
+
+On a new host, create that task when it is absent, with the same action, principal, daily 02:30 local schedule, and `StartWhenAvailable`. Then confirm it. The service installer does not register the task.
+
+Run the health script once during recovery:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\HC\deployment\health\verify-autostart.ps1
+```
+
+That script is the checker for steps 10 through 14. It is read-only: it does not start services, export rows, or print secret values. Recovery is complete for this step when the task matches the definition above and the script prints `PASS`.
 
 ## Intentional differences
 
@@ -286,6 +335,7 @@ The dry run compares `production-services.json` to the running services. These d
 7. TKP, TCP, YQ, and AGM use the shared Python executable as the NSSM application. The script path is `AppParameters`. Uploader uses its own virtual environment. That matches the live services.
 8. The deployed AGM `start_agm.py` is the absolute-path launcher. Recovery uses the repo-relative launcher at `5ca9a7c`. The service command line does not change.
 9. Deployed `yq_ts.py` is not a byte-for-byte copy of git `7a935e4`. Recovery uses the git file, plus `tearsheet_paths.py` from `0a157c4`.
+10. `HC-TCP-Public` Parameters still name `C:\HC\apps\shared\.venv310\Scripts\python.exe` and `C:\HC\apps\tcp\tcp_ts_v2.py` after the 2026-10-10 recycle. The listening process is the venv re-exec `C:\Python310\python.exe` with that same script. The other Python services do the same. Process ids are omitted on purpose.
 
 A dry run that reports any other config drift, or a catalog field that differs from the running service, is a failure. Do not apply it.
 
@@ -297,4 +347,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\HC\deployment\rebuild\ins
 
 The command is read-only: no `nssm.exe`, no `sc.exe`, and no service start or stop. Its process-id snapshot must be unchanged at the end.
 
-On 2026-10-10 that command on HC-PROD-VPS01 exited 0: `DRY-RUN RESULT: PASS` and `MUTATIONS: none`. All six services matched the catalog and stayed Running. The only config-file drift was the secret names listed above, plus one empty YQ environment entry. `DOWNSTREAM_INGEST_TOKEN` was present only on the running uploader service.
+On 2026-10-10, after `HC-TCP-Public` was re-read from the registry, that command on HC-PROD-VPS01 exited 0: `DRY-RUN RESULT: PASS` and `MUTATIONS: none`. All six services matched the catalog and stayed Running. The live TCP command line remained `C:\HC\apps\shared\.venv310\Scripts\python.exe` with arguments `C:\HC\apps\tcp\tcp_ts_v2.py`. The only config-file drift was the secret names listed above, plus one empty YQ environment entry. `DOWNSTREAM_INGEST_TOKEN` was present only on the running uploader service.

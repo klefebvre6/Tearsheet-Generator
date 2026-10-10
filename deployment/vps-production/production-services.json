@@ -16,7 +16,8 @@
     "HC-TCP-Public runs as .\\svc_hc_tearsheets. The account password is not stored here. -Apply on a new host requires HC_SVC_HC_TEARSHEETS_PASSWORD and must not print it. -DryRun does not need it.",
     "TKP, TCP, YQ, and AGM use C:\\HC\\apps\\shared\\.venv310\\Scripts\\python.exe as the NSSM application and the script path as AppParameters. Uploader uses C:\\HC\\apps\\uploader\\.venv\\Scripts\\python.exe. That is the live split.",
     "The on-disk AGM launcher is an absolute-path runpy script. Git commit 5ca9a7c6419559ae1375d8b4adb5533bc0ba16c5 is the repo-relative launcher. Service parity is the live command line.",
-    "Deployed yq_ts.py is not a byte-for-byte copy of git 7a935e4e66bcd0983b4ccc7cb962eafeb6db59c0 (UTF-8 BOM, trailing newline, CP437 mojibake). Recovery uses the git file. tearsheet_paths.py comes from 0a157c49d769202c1c92590d6acc31ca512588fc."
+    "Deployed yq_ts.py is not a byte-for-byte copy of git 7a935e4e66bcd0983b4ccc7cb962eafeb6db59c0 (UTF-8 BOM, trailing newline, CP437 mojibake). Recovery uses the git file. tearsheet_paths.py comes from 0a157c49d769202c1c92590d6acc31ca512588fc.",
+    "HC-TCP-Public was re-read from Win32_Service and Parameters after the 2026-10-10 recycle. Application remains C:\\HC\\apps\\shared\\.venv310\\Scripts\\python.exe, AppParameters remains C:\\HC\\apps\\tcp\\tcp_ts_v2.py, and AppDirectory remains C:\\HC\\apps\\tcp. The NSSM python child uses that command line and re-execs C:\\Python310\\python.exe with the same script; the re-exec listens on 127.0.0.1:8302. Uploader, TKP, YQ, and AGM use the same venv re-exec pattern. Process ids are not catalog fields. Do not restart a service to chase them."
   ],
   "services": [
     {

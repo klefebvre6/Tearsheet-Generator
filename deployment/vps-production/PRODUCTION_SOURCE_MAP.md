@@ -7,7 +7,9 @@ Remote: `https://github.com/klefebvre6/Tearsheet-Generator.git`
 
 No secret values are recorded here. `C:\HC\apps` was not modified.
 
-No single branch contains every running component. `origin/main` is `f540135c070b8e2143c098327bc088085e31c94f` (merge of PR #62, 2026-07-22). `origin/live-main` is `3cfda4fdde5eaa8fae42c87b56d30d34aa717f68` (2026-07-31). Both are ancestors of the commits below. Neither contains the October VPS commits. The future combination is in `C:\HC\deployment\GIT_CONSOLIDATION_PLAN.md`. It has not been started.
+No single branch contains every running component. `origin/main` is `f540135c070b8e2143c098327bc088085e31c94f` (merge of PR #62, 2026-07-22). `origin/live-main` is `3cfda4fdde5eaa8fae42c87b56d30d34aa717f68` (2026-07-31). Both are ancestors of the commits below. Neither contains the October VPS commits. `ops/vps-production-rebuildability-20261010` at `a3aa50a7b7abe9e827b121661d1c37441e5e80a1` is on origin and contains only the uploader line plus `deployment/vps-production/`. The future combination is in `C:\HC\deployment\GIT_CONSOLIDATION_PLAN.md`. It has not been started.
+
+Lane C rechecked this map on 2026-10-10. This lane did not modify `C:\HC\apps`, did not commit, and did not merge.
 
 ## Uploader
 
@@ -38,11 +40,27 @@ Runtime config: NSSM environment for `HC-Uploader-Public`. On-disk copy: `C:\HC\
 | Runtime | `C:\HC\apps\tcp\tcp_ts_v2.py` |
 | Service | `HC-TCP-Public` on `127.0.0.1:8302` |
 | Branch | `feature/tcp-benchmark-refresh-comparison-chart` |
-| Commit | `815b1d8d607b1dc73fc86d852d64902b2e24acda` |
-| Remote | `origin/feature/tcp-benchmark-refresh-comparison-chart` |
-| Exact match | YES |
+| Origin commit | `815b1d8d607b1dc73fc86d852d64902b2e24acda` |
+| Local commit | `ee48aef6c5f83a81a96c0cc0773af69ccf991e11` |
+| Remote | `origin/feature/tcp-benchmark-refresh-comparison-chart` is still `815b1d8` |
+| Whole directory matches one commit | NO |
 
-Deployed SHA-256 `CDE21E3FC1922B1D905227FDD08A214C5089D5EBC2E7943E51E8A03636B0355C`. Git blob `5fa6f6752693e73d995f6de0bd19018da3b4952f` is the blob of `tcp_ts_v2.py` in that commit. These other files in `C:\HC\apps\tcp` also match `815b1d8`: `tcp_benchmarks.py`, `tcp_comparison.py`, `tcp_dashboard.py`, `tcp_public_sections.py`, and `assets\styles.css`. See same-named copies below.
+`ee48aef` is a single-parent child of `815b1d8`, committed 2026-10-10 13:44:01 -0400. The subject says `Merge BTC/ETH overlays into the TCP NAV chart instead of a separate comparison chart`. It has one parent. It is not on origin.
+
+These deployed files match `ee48aef` (`git hash-object` equals the blob):
+
+- `tcp_ts_v2.py`, blob `ebb0e6763f18aef131eb1edc801e8ca015283463`, SHA-256 `630F29834DFDD4DBC9005D8DF6DFD5728214F1F25FBA150C8E3607AC40D36799`. The `815b1d8` blob is still `5fa6f6752693e73d995f6de0bd19018da3b4952f`.
+- `tcp_comparison.py`
+- `tcp_nav_overlays.py` (this file is added in `ee48aef`)
+- `tcp_benchmarks.py` (same blob as `815b1d8`)
+
+These deployed files are not blobs in this clone. `git diff --no-index` against `ee48aef` shows layout edits. The TCP worktree has a different uncommitted copy of each one.
+
+- `tcp_dashboard.py` changes the NAV chart bottom margin from 36 to 52. Hash `dce3dd4c0b95516ffcfc86f3f88ec4c26b4cf593`. Write time 13:54:18.
+- `tcp_public_sections.py` changes the footnote margin, drops the chart `maxHeight`, and adds classes `tcp-nav-chart-plot-wrap` and `tcp-overlay-note`. Hash `6c0a669df3722845750d8ef3786c8336f9959890`. Write time 13:54:17. The account-stat tuple remains `$50,000`.
+- `assets\styles.css` adds NAV-chart wrap, z-index, and height rules. Hash `f89b16f2540c7ae28cb894fda7dd61a5ac0d4b47`. Write time 13:54:21. It has no `#NAV-graph .gtitle` rules.
+
+The NSSM process for `C:\HC\apps\tcp\tcp_ts_v2.py` was created at 13:54:26 and was still the listener on `127.0.0.1:8302` at this recheck. This lane did not start it. A separate interpreter started at 13:33:26 listens on `127.0.0.1:8312` and is not `HC-TCP-Public`. This lane left it running.
 
 Persistent data: `C:\HC\data\tcp\tcp_daily_returns_secret_state.json`
 Runtime config: NSSM environment. See the config-drift section. Do not rebuild the service from `C:\HC\config\tcp.env` alone.
@@ -77,15 +95,16 @@ Runtime config: NSSM environment. On-disk non-secret copy: `C:\HC\config\tkp.env
 
 Deployed `yq_ts.py` SHA-256 `1E13E9C323928C16A48E6F1ECBB91D6EF8322DEEADB127604119FE4BD22E1C94`.
 
-The file is the committed source with three non-functional differences:
+The file is the committed source with four non-functional differences:
 
 - a UTF-8 BOM
-- one extra trailing newline
-- non-ASCII punctuation rewritten as CP437 mojibake (box drawing, em dashes, check marks, and the non-breaking space in the column-name cleaner)
+- CRLF line endings (the git blob is LF)
+- one extra trailing newline after the CP437 repair
+- non-ASCII punctuation rewritten as CP437 mojibake on 106 lines (box drawing, em dashes, check marks, and the non-breaking space in the column-name cleaner)
 
-Decoding those mojibake characters as CP437 and then as UTF-8 reproduces `yq_ts.py` at `7a935e4`, including the loopback `/healthz` startup. Committing the deployed bytes would put the corrupted strings into Git. The health check, port 8303, and `debug=False` behavior are already in that commit.
+Strip the BOM, encode that text as CP437, turn CRLF into LF, and drop one trailing newline. The result is `yq_ts.py` at `7a935e4`, including the loopback `/healthz` startup. 2,034 lines already match the blob. Zero lines differ after the repair. Committing the deployed bytes would put the corrupted strings into Git. The health check, port 8303, and `debug=False` behavior are already in that commit.
 
-`C:\HC\apps\yq\tearsheet_paths.py` is a separate, exact match to `tearsheet_paths.py` at `0a157c4`. On a `vps-*` profile that copy resolves `yq.csv` from the VPS data root before a sibling file. Current HEAD checks the sibling first. The YQ service uses the `0a157c4` order. The TKP and AGM copies do too. `C:\HC\apps\shared\tearsheet_paths.py` matches the sibling-first blob on `7a935e4`, `ee9fcfd`, and `815b1d8`.
+`C:\HC\apps\yq\tearsheet_paths.py` is a separate, exact match to `tearsheet_paths.py` at `0a157c4`. On a `vps-*` profile that copy resolves `yq.csv` from the VPS data root before a sibling file. Current HEAD checks the sibling first. The YQ service uses the `0a157c4` order. The TKP and AGM copies do too. `C:\HC\apps\shared\tearsheet_paths.py` matches the sibling-first blob on `7a935e4`, `ee9fcfd`, `815b1d8`, and `ee48aef`.
 
 `yq_data_current.py` and `tearsheet_disclosure.py` in `C:\HC\apps\yq` match the current checkout.
 
@@ -105,7 +124,7 @@ Runtime config: NSSM environment, including `YQ_CSV_PATH` and `GLENN_UPLOADER_IN
 | Remote | `origin/preserve/vps-agm-production-20261010` |
 | Pushed | YES |
 
-`Momentum Pacer\mp_ts.py` matches `0a157c4`, `815b1d8`, and `7a935e4` (same blob). These deployed files also match `0a157c4` exactly: `tearsheet_paths.py`, `assets\styles.css`, `tcp_public_sections.py`, and `tcp_ts.py`.
+`Momentum Pacer\mp_ts.py` is the same blob on `0a157c4`, `5ca9a7c`, `7a935e4`, `ee9fcfd`, `815b1d8`, and `ee48aef`. These deployed files also match `0a157c4` exactly: `tearsheet_paths.py`, `assets\styles.css`, `tcp_public_sections.py`, and `tcp_ts.py`.
 
 The deployed launcher is not that commit. It is a two-line absolute-path script:
 
@@ -125,20 +144,22 @@ Runtime config: NSSM environment (`HC_AGM_*`, ingest enabled). On-disk non-secre
 
 ## Same-named copies
 
-One repo path is deployed as more than one blob. Hashes were compared with `git hash-object` against the five production commits.
+One repo path is deployed as more than one blob. Hashes were compared with `git hash-object` against `ee9fcfd`, `815b1d8`, `7a935e4`, `0a157c4`, `5ca9a7c`, and local `ee48aef`.
 
 | Repo path | Deployed copy | Matches |
 | --- | --- | --- |
 | `tearsheet_paths.py` | `C:\HC\apps\yq`, `C:\HC\apps\tkp`, `C:\HC\apps\agm` | `0a157c4` and `5ca9a7c` |
 | `tearsheet_paths.py` | `C:\HC\apps\shared` | `7a935e4`, `ee9fcfd`, `815b1d8` |
-| `tcp_ts_v2.py`, `tcp_benchmarks.py`, `tcp_comparison.py`, `tcp_dashboard.py`, `tcp_public_sections.py`, `assets\styles.css` | `C:\HC\apps\tcp` | `815b1d8` |
+| `tcp_ts_v2.py`, `tcp_comparison.py`, `tcp_nav_overlays.py` | `C:\HC\apps\tcp` | `ee48aef` only (`815b1d8` does not have this `tcp_ts_v2.py` or `tcp_nav_overlays.py`) |
+| `tcp_benchmarks.py` | `C:\HC\apps\tcp` | `815b1d8` and `ee48aef` |
+| `tcp_dashboard.py`, `tcp_public_sections.py`, `assets\styles.css` | `C:\HC\apps\tcp` | no commit; layout edits past `ee48aef` |
 | `tcp_ts_v2.py` and the older `tcp_*.py` helpers | `C:\HC\apps\tkp`, `C:\HC\apps\agm` | `0a157c4` and `5ca9a7c` |
 | `assets\styles.css` | `C:\HC\apps\tkp`, `C:\HC\apps\yq`, `C:\HC\apps\agm` | `0a157c4` and `5ca9a7c` |
 | `assets\styles.css` | `C:\HC\apps\shared` | `7a935e4` and `ee9fcfd` |
 
 The only `tearsheet_paths.py` difference is the order inside `resolve_yq_csv_path`. TCP imports `resolve_tcp_data_root` and `resolve_tcp_ingest_audit_path` from the shared file. Those functions are the same in both blobs. YQ uses its own app-directory copy.
 
-AGM `mp_ts.py` imports `ACCOUNT_STATS_TABLE_CLASS`, `MONTHLY_PERFORMANCE_CLASS`, and `monthly_performance_cell_class` from its app-local `tcp_public_sections.py`. It does not import the nominal-asset tuples. The running TCP service uses the `815b1d8` module: the account-stat label is `$50,000`, and the module includes the comparison chart. The `0a157c4` copy of that module says `$100,000`.
+AGM `mp_ts.py` imports `ACCOUNT_STATS_TABLE_CLASS`, `MONTHLY_PERFORMANCE_CLASS`, and `monthly_performance_cell_class` from its app-local `tcp_public_sections.py`. It does not import the nominal-asset tuples. The deployed TCP account-stat tuple is `$50,000`, the same tuple as `ee48aef`. The `0a157c4` copy of that tuple is `$100,000`. Both copies contain the two-tranche `$100,000 Nominal` sentence.
 
 `tkp_ts.py` does not import `tcp_public_sections` or `tcp_ts`. The running TKP behavior is `tkp_ts.py` at `0a157c4`.
 
@@ -156,9 +177,10 @@ The 12:19 automatic backup's `redacted-runtime-env.json` marks secret keys as no
 
 ## Worktrees left in place
 
-- `C:\HC\deployment\source\Tearsheet-Generator` on `feature/uploader-chart-benchmark-refresh` at `ee9fcfd`
-- `C:\HC\deployment\worktrees\tcp-benchmark-refresh-comparison-chart` on `815b1d8`
+- `C:\HC\deployment\source\Tearsheet-Generator` on `feature/uploader-chart-benchmark-refresh` at `ee9fcfd`. Clean. This lane did not check out another branch.
+- `C:\HC\deployment\worktrees\tcp-benchmark-refresh-comparison-chart` on local `ee48aef`, with uncommitted edits and untracked `_preview_verify` PNGs. `_preflight_caches` is gone and was not recreated.
 - `C:\HC\deployment\worktrees\preserve-vps-agm-production-20261010` on `5ca9a7c`
 - `C:\HC\deployment\_pr65-deploy` detached at `0a157c4`
+- `C:\HC\deployment\worktrees\ops-vps-production-rebuildability-20261010` on `a3aa50a`
 
-Nothing was merged or deleted.
+This lane did not merge, commit, push, or delete a worktree.

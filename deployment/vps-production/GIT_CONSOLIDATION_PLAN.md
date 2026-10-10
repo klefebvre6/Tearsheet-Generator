@@ -5,11 +5,31 @@ Inspected: 2026-10-10
 Checkout: `C:\HC\deployment\source\Tearsheet-Generator`
 Remote: `https://github.com/klefebvre6/Tearsheet-Generator.git`
 
-This is a read of `git status`, `git worktree list`, and `git ls-remote --heads origin`. Nothing was merged, rebased, pushed, deleted, or committed. The sequence at the bottom does not start now.
+Lane C rechecked the same clone on 2026-10-10 after the ops commit `a3aa50a` was already on origin. This lane did not commit, merge, rebase, push, fetch, delete a branch or worktree, restart a service, or check out another branch. The uploader checkout is still `feature/uploader-chart-benchmark-refresh` at `ee9fcfd`. The sequence at the bottom does not start now.
+
+This clone's `remote.origin.fetch` refspec tracks only `feature/ovh-tkp-tcp-agm-ready`. Remote classification used `git ls-remote --heads origin` and the local object store. `gh pr list` was not used.
+
+## Lane C answers
+
+1. **Executable production code outside Git.** The YQ service logic and the AGM application logic are in Git. The deployed `yq_ts.py` bytes and the absolute AGM launcher are the intentional non-commits. Three current `C:\HC\apps\tcp` files are a further gap: `tcp_dashboard.py`, `tcp_public_sections.py`, and `assets\styles.css` are not blobs in this clone. The built uploader files under `C:\HC\apps\uploader\static` are generated output; their source is `ee9fcfd`.
+
+2. **Production-relevant branches.** `feature/uploader-chart-benchmark-refresh` `ee9fcfd` (origin matches). `feature/tcp-benchmark-refresh-comparison-chart`: origin is still `815b1d8`; the local tip is unpushed `ee48aef`, parent `815b1d8`. `feature/vps-yq-loopback-healthz` `7a935e4`. `refactor/github-vps-deployment-structure` `0a157c4`. `preserve/vps-agm-production-20261010` `5ca9a7c` (origin matches). `ops/vps-production-rebuildability-20261010` `a3aa50a` (origin matches) is the rebuild snapshot on top of `ee9fcfd` only. `origin/main` `f540135` and `origin/live-main` `3cfda4f` are ancestors of both lines and do not contain the October VPS commits. No local ref and no origin head present in this clone contains `ee9fcfd`, `815b1d8`, and `0a157c4` together.
+
+3. **Superseded branches and PRs.** Do not close them. The 54 remote tips below are still contained in both `ee9fcfd` and `5ca9a7c`. `main` and `live-main` are the only extra heads in that set. The same 11 remote tips are still absent from the clone and stay unclassified. One-line ancestors that are already inside a production commit: `e6297b9`, `ed31242`, and `9bba414`. `0a157c4` is still not in `main` or `live-main`; local notes call it unmerged PR #65. The ops branch is not superseded, and it is not the running tree.
+
+4. **Active useful worktrees.** All five: the uploader checkout at `ee9fcfd`, the TCP worktree at local `ee48aef`, the AGM worktree at `5ca9a7c`, detached `_pr65-deploy` at `0a157c4`, and the ops worktree at `a3aa50a`.
+
+5. **Stale worktrees.** None. `_preflight_caches` is already gone and was not recreated. The TCP worktree's untracked `_preview_verify` PNGs stay where they are.
+
+6. **Safest eventual consolidation order.** Leave `main` and `live-main` where they are. Wait until the in-progress TCP edit is one commit whose tree matches `C:\HC\apps\tcp`. This lane does not make that commit. Then, in a new worktree, create `production/vps-baseline` from `7a935e4`, bring in `ee9fcfd` and that TCP commit (`ee48aef` already contains `815b1d8`, and its path list from `7a935e4` does not overlap `ee9fcfd`), copy `tkp_ts.py` and `tearsheet_paths.py` from `0a157c4`, copy repo-relative `start_agm.py` and `start_agm.cmd` from `5ca9a7c`, and combine `assets/styles.css` on purpose. Do not merge `a3aa50a` as a substitute tree. Do not push from this plan.
+
+7. **Long-term baseline branch.** `production/vps-baseline`, created later. `origin/main` and `origin/live-main` are not that branch. The branch was not created here.
+
+8. **Normal future development.** One reviewed production baseline, then short-lived feature branches cut from it. The TCP overlay and the later uncommitted layout edit both landed on the preservation checkout; that is the pattern this workflow replaces.
 
 ## Recommended future baseline
 
-One reviewed branch, named `production/vps-baseline`, created later in a non-production worktree. After that branch is reviewed and pushed, new work uses short-lived feature branches from it.
+One reviewed branch, named `production/vps-baseline`, created later in a new worktree. After that branch is reviewed and pushed, new work uses short-lived feature branches from it.
 
 `origin/main` and `origin/live-main` are not that baseline.
 
@@ -24,7 +44,11 @@ No merge was performed to test this. The recommendation is the file selection be
 
 ## Two lines, five commits
 
-The lines fork at `38eb0a2f1bf20248dbb7bec87c49be22a136b394` (2026-08-10, `build: add organized Windows VPS deployment layout`), which is after `live-main`.
+The lines fork at `38eb0a2f1bf20248dbb7bec87c49be22a136b394` (2026-08-10, `build: add organized Windows VPS deployment layout`), which is after `live-main`. Their merge-base is that commit. `ee9fcfd` is 9 commits ahead of `5ca9a7c`. `5ca9a7c` is 14 commits ahead of `ee9fcfd`.
+
+The YQ / uploader / TCP history is a single-parent first-parent chain from `38eb0a2`. `49f8864`'s only parent is `38eb0a2`. `ee9fcfd` and `815b1d8` are children of `7a935e4`. `ee48aef6c5f83a81a96c0cc0773af69ccf991e11` is a single-parent child of `815b1d8` (2026-10-10 13:44:01 -0400, subject `Merge BTC/ETH overlays into the TCP NAV chart instead of a separate comparison chart`). That subject is not a two-parent merge. `ee48aef` is local only. `origin/feature/tcp-benchmark-refresh-comparison-chart` is still `815b1d8`.
+
+The TKP / AGM first-parent spine is the 14-commit chain ending at `5ca9a7c`. `38eb0a2` is not on that spine. It is the second parent of merge `ae43728`. `f415345` is also a merge; its second parent is `e86c8a9` (`docs: finalize Windows VPS deployment layout`), which is the parent of `38eb0a2`.
 
 YQ / uploader / TCP line, from that fork to the split at `7a935e4`, then two sibling commits:
 
@@ -38,7 +62,7 @@ YQ / uploader / TCP line, from that fork to the split at `7a935e4`, then two sib
 - `7a935e4` `feature/vps-yq-loopback-healthz`
 - then two siblings:
   - `ee9fcfd` `feature/uploader-chart-benchmark-refresh`
-  - `815b1d8` `feature/tcp-benchmark-refresh-comparison-chart`
+  - `815b1d8` `feature/tcp-benchmark-refresh-comparison-chart`, then local child `ee48aef` (not on origin)
 
 TKP / AGM line, from the same fork through `5ca9a7c`:
 
@@ -59,34 +83,36 @@ TKP / AGM line, from the same fork through `5ca9a7c`:
 
 `26b6da9` / `608c56e` on the TKP line and `1bc440b` / `ed31242` on the YQ line share commit subjects. They are different commits.
 
-`ee9fcfd` is 9 commits ahead of `5ca9a7c`. `5ca9a7c` is 14 commits ahead of `ee9fcfd`. Their merge-base is `38eb0a2`.
-
-`ee9fcfd` and `815b1d8` are siblings. Both are children of `7a935e4`. The paths each one changes from `7a935e4` do not overlap.
+`ee9fcfd` and `815b1d8` are siblings. Both are children of `7a935e4`. The paths each one changes from `7a935e4` do not overlap. The paths `ee48aef` changes from `7a935e4` add `tcp_nav_overlays.py` to the `815b1d8` path list and still do not overlap `ee9fcfd`.
 
 ## Which branch contains each production component
 
-Remote tips match these SHAs. Local branches for the five production refs have no upstream configured, except `feature/ovh-tkp-tcp-agm-ready`. `refactor/github-vps-deployment-structure` is not a local branch; the detached worktree is on that commit.
+Origin matches the SHAs below except for TCP: origin is `815b1d8` and the local branch is `ee48aef`. Local branches for the production refs have no upstream configured, except `feature/ovh-tkp-tcp-agm-ready`. The ops branch also has no upstream configured; origin already has `a3aa50a`. `refactor/github-vps-deployment-structure` is not a local branch; the detached worktree is on that commit. This lane did not set any upstream.
 
 | Component | Running file | Branch | Commit |
 | --- | --- | --- | --- |
 | Uploader chart and benchmark | `C:\HC\apps\uploader\app\performance.py`, `benchmark_store.py`, and the chart frontend in that commit | `feature/uploader-chart-benchmark-refresh` | `ee9fcfd542a0248467cffddd2e8a93ff76e54175` |
 | Other running uploader `app\*.py` | `C:\HC\apps\uploader\app\` | same blobs on `ee9fcfd`, `815b1d8`, and `7a935e4` | `ee9fcfd` is the uploader tip |
-| TCP service | `C:\HC\apps\tcp\tcp_ts_v2.py` plus `tcp_benchmarks.py`, `tcp_comparison.py`, `tcp_dashboard.py`, `tcp_public_sections.py`, `assets\styles.css` | `feature/tcp-benchmark-refresh-comparison-chart` | `815b1d8d607b1dc73fc86d852d64902b2e24acda` |
+| TCP service | `C:\HC\apps\tcp\tcp_ts_v2.py`, `tcp_benchmarks.py`, `tcp_comparison.py`, `tcp_nav_overlays.py` match local `ee48aef`. `tcp_dashboard.py`, `tcp_public_sections.py`, and `assets\styles.css` are newer uncommitted bytes | `feature/tcp-benchmark-refresh-comparison-chart` | origin `815b1d8d607b1dc73fc86d852d64902b2e24acda`; local `ee48aef6c5f83a81a96c0cc0773af69ccf991e11` |
 | TKP service | `C:\HC\apps\tkp\tkp_ts.py` | `refactor/github-vps-deployment-structure` | `0a157c49d769202c1c92590d6acc31ca512588fc` |
 | YQ logic | `C:\HC\apps\yq\yq_ts.py` behavior | `feature/vps-yq-loopback-healthz` | `7a935e4e66bcd0983b4ccc7cb962eafeb6db59c0` |
 | YQ, TKP, and AGM path resolver | app-local `tearsheet_paths.py` | `refactor/github-vps-deployment-structure` | `0a157c4` (also on `5ca9a7c`) |
 | AGM application | `Momentum Pacer\mp_ts.py` | same blob on all five tips | exact match of `0a157c4` |
 | AGM repo-relative launcher | `start_agm.py`, `start_agm.cmd` in Git | `preserve/vps-agm-production-20261010` | `5ca9a7c6419559ae1375d8b4adb5533bc0ba16c5` |
 
-`7a935e4` is already inside both `ee9fcfd` and `815b1d8`. `0a157c4` is the parent of `5ca9a7c`. Those containments do not produce one tree that runs production. Each tip is still missing another tip's files:
+`7a935e4` is already inside `ee9fcfd`, `815b1d8`, and `ee48aef`. `0a157c4` is the parent of `5ca9a7c`. `a3aa50a` contains `ee9fcfd` and the `deployment/vps-production/` snapshot from the ops commit. Those containments do not produce one tree that runs production. Each tip is still missing another tip's files:
 
-- `ee9fcfd` has the uploader fix and YQ `/healthz`. It does not have the TCP chart commit, `tkp_ts.py` from `0a157c4`, the vps-before-sibling `tearsheet_paths.py`, or `start_agm.py`.
-- `815b1d8` has the TCP chart commit and YQ `/healthz`. It does not have the uploader fix or the TKP/AGM-only files.
-- `0a157c4` and `5ca9a7c` have TKP, the vps-before-sibling resolver, and (on `5ca9a7c` only) the repo-relative launcher. Their `yq_ts.py` is the pre-`/healthz` file. Their `performance.py` and `benchmark_store.py` are the pre-fix blobs. Their `tcp_ts_v2.py` does not have the comparison chart.
+- `ee9fcfd` has the uploader fix and YQ `/healthz`. It does not have `ee48aef`, `tkp_ts.py` from `0a157c4`, the vps-before-sibling `tearsheet_paths.py`, or `start_agm.py`.
+- `815b1d8` has the earlier TCP chart commit and YQ `/healthz`. It does not have `tcp_nav_overlays.py`, the uploader fix, or the TKP/AGM-only files.
+- `ee48aef` has the TCP overlay commit and YQ `/healthz`. It does not have the uploader fix or the TKP/AGM-only files. It also does not have the later uncommitted layout bytes now in `C:\HC\apps\tcp`.
+- `0a157c4` and `5ca9a7c` have TKP, the vps-before-sibling resolver, and (on `5ca9a7c` only) the repo-relative launcher. Their `yq_ts.py` is the pre-`/healthz` file. Their `performance.py` and `benchmark_store.py` are the pre-fix blobs. Their `tcp_ts_v2.py` does not have the overlay commit.
+- `a3aa50a` does not contain `815b1d8`, `ee48aef`, `0a157c4`, or `5ca9a7c`.
 
 ## What should eventually be consolidated
 
-Build the baseline from `7a935e4`, then add the two sibling diffs, then copy specific files from `0a157c4` and `5ca9a7c`. Tests stay with the code version they cover.
+Build the baseline from `7a935e4`, then add the uploader diff and the TCP diff, then copy specific files from `0a157c4` and `5ca9a7c`. Tests stay with the code version they cover.
+
+The TCP diff is `ee48aef` only after the uncommitted `C:\HC\apps\tcp` layout edits are themselves a commit that matches those files. Until that commit exists, `ee48aef` is the TCP commit to carry forward, and it is short of `tcp_dashboard.py`, `tcp_public_sections.py`, and `assets/styles.css` as they sit on disk. Do not build the baseline from the dirty TCP worktree.
 
 Keep from `ee9fcfd` (disjoint from the TCP sibling):
 
@@ -95,12 +121,14 @@ Keep from `ee9fcfd` (disjoint from the TCP sibling):
 - the benchmark tests and `benchmark_fixtures.py` in that commit
 - `uploader/frontend` chart files in that commit, including `chartSeriesSelection.ts`
 
-Keep from `815b1d8` (disjoint from the uploader sibling):
+Keep from `ee48aef` (disjoint from the uploader sibling; this commit already contains `815b1d8`):
 
-- `tcp_ts_v2.py`, `tcp_benchmarks.py`, `tcp_comparison.py`, `tcp_dashboard.py`, `tcp_public_sections.py`
+- `tcp_ts_v2.py`, `tcp_benchmarks.py`, `tcp_comparison.py`, `tcp_dashboard.py`, `tcp_public_sections.py`, `tcp_nav_overlays.py`
 - `tests/test_tcp_benchmarks.py`, `tests/test_tcp_comparison.py`, `tests/tcp_layout_support.py`
-- the `.gitignore` line in that commit
-- TCP comparison-chart rules in `assets/styles.css` (see the stylesheet step)
+- the `.gitignore` line already in that commit
+- `assets/styles.css` as it is in `ee48aef`, then the later layout edits once they are committed (see the stylesheet step)
+
+`C:\HC\apps\tcp\tcp_ts_v2.py`, `tcp_benchmarks.py`, `tcp_comparison.py`, and `tcp_nav_overlays.py` match `ee48aef` now. `tcp_dashboard.py` on disk changes the NAV chart bottom margin from 36 to 52. `tcp_public_sections.py` on disk changes the footnote margin, drops the chart `maxHeight`, and adds the `tcp-nav-chart-plot-wrap` / `tcp-overlay-note` classes. `assets\styles.css` on disk adds the NAV-chart wrap, z-index, and height rules. Those three deployed blobs are not in the object store. The worktree copies of the same paths are a different uncommitted edit, including further changes to `tcp_ts_v2.py` and the TCP tests. Leave that worktree dirty. Do not commit it here.
 
 Keep from `7a935e4`, which both siblings already contain:
 
@@ -126,15 +154,15 @@ Leave these `0a157c4` blobs out of the application baseline. They are not what t
 - `uploader/backend/app/db.py`, `main.py`, `downstream_export.py`, `export_summary.py`, and `ingest_preflight.py` on `0a157c4` differ from the running uploader. The running copies match `ee9fcfd`.
 - The uploader export UI on `0a157c4` (`App.tsx`, `ExportActionBar`, `exportStatus`) differs from the running frontend source.
 - `test_program_export.py` is absent on `0a157c4` and present on the YQ line. Keep the YQ-line test.
-- `tcp_public_sections.py` and `tcp_ts.py` on `0a157c4` change the nominal-asset label from `$50,000` to `$100,000`. `HC-TCP-Public` runs the `815b1d8` module (`$50,000` plus the comparison chart). AGM imports only three class helpers from its older copy, not those tuples. `tkp_ts.py` does not import either module.
+- `tcp_public_sections.py` and `tcp_ts.py` on `0a157c4` use the account-stat tuple `$100,000`. `ee48aef` and the deployed TCP file use `$50,000` for that tuple. Both versions also contain the two-tranche `$100,000 Nominal` sentence. AGM imports only three class helpers from its older copy, not those tuples. `tkp_ts.py` does not import either module.
 
-`assets/styles.css` is three deployed blobs, all already in Git:
+`assets/styles.css` is still more than one deployed blob:
 
-- `C:\HC\apps\tcp\assets\styles.css` matches `815b1d8` (comparison-chart selectors).
-- `C:\HC\apps\tkp`, `C:\HC\apps\yq`, and `C:\HC\apps\agm` match `0a157c4` (TKP `#NAV-graph .gtitle` rules, 8 lines).
+- `C:\HC\apps\tcp\assets\styles.css` is the uncommitted layout sheet described above. `ee48aef`'s stylesheet has no `#NAV-graph .gtitle` rules. `815b1d8`'s comparison-chart selectors are not the deployed sheet.
+- `C:\HC\apps\tkp`, `C:\HC\apps\yq`, and `C:\HC\apps\agm` match `0a157c4` and `5ca9a7c`, including the `#NAV-graph .gtitle` rules.
 - `C:\HC\apps\shared\assets\styles.css` matches `7a935e4` and `ee9fcfd`.
 
-The baseline has one `assets/styles.css`. The future edit has to combine the TCP comparison-chart selectors and the TKP title rules on purpose. That combination was not made here.
+The baseline has one `assets/styles.css`. The future edit has to combine the committed TCP sheet (after the layout edits are in that commit) and the TKP `#NAV-graph .gtitle` rules on purpose. That combination was not made here.
 
 `C:\HC\apps\shared\tearsheet_paths.py` matches the sibling-first blob. The functions TCP imports from it are the same in both versions. The baseline file is the `0a157c4` order, because that is what the YQ service loads. Updating the shared copy on disk is a later deploy, not part of writing this plan.
 
@@ -142,31 +170,37 @@ PR #65 deployment files (`deployment/windows-vps` manifests and scripts, and the
 
 ## Production code still outside Git
 
-Deployed Python and `.cmd` files under `C:\HC\apps\tcp`, `tkp`, `yq`, `agm`, `shared` (venv excluded), and `C:\HC\apps\uploader\app` were hashed with `git hash-object` and compared to the five commits.
+Deployed `.py`, `.cmd`, `.css`, and `.ps1` files under `C:\HC\apps\tcp`, `tkp`, `yq`, `agm`, `shared`, and `uploader` were hashed with `git hash-object`. Virtualenvs, `__pycache__`, and `node_modules` were skipped. 104 files matched a blob reachable from `ee9fcfd`, `815b1d8`, or `5ca9a7c`. `tcp_ts_v2.py`, `tcp_comparison.py`, and `tcp_nav_overlays.py` match `ee48aef` and are in local Git. `tcp_benchmarks.py` matches both `815b1d8` and `ee48aef`.
 
-Two launcher files and one encoded YQ file are the only application files that matched none of those commits. That is intentional. Do not byte-copy them.
+These deployed files matched none of those commits:
 
 | Deployed file | Why it is outside Git | What Git already has |
 | --- | --- | --- |
-| `C:\HC\apps\yq\yq_ts.py` | UTF-8 BOM, one extra trailing newline, and CP437 mojibake of non-ASCII punctuation. SHA-256 `1E13E9C323928C16A48E6F1ECBB91D6EF8322DEEADB127604119FE4BD22E1C94`. | Logic, `/healthz`, and the loopback `app.run` are `yq_ts.py` at `7a935e4` (blob `27c966a354`). Decoding the mojibake reproduces that blob. |
+| `C:\HC\apps\yq\yq_ts.py` | UTF-8 BOM, CRLF line endings, one extra trailing newline, and CP437 mojibake on 106 lines. SHA-256 `1E13E9C323928C16A48E6F1ECBB91D6EF8322DEEADB127604119FE4BD22E1C94`. | Logic, `/healthz`, and the loopback `app.run` are `yq_ts.py` at `7a935e4`. Strip the BOM, encode the text as CP437, turn CRLF into LF, and drop one trailing newline. That equals the blob. 2,034 lines already match; zero lines differ after that repair. Do not commit the deployed bytes. |
 | `C:\HC\apps\agm\start_agm.py` | Absolute-path two-liner. SHA-256 `C3F3314FDDFFC3F0B6B1FA55440C9BA1FD98B7C18BE2DA025473391EA1ECCC2B`. | Repo-relative `start_agm.py` at `5ca9a7c`. |
-| `C:\HC\apps\agm\start_agm.cmd` | Calls `C:\HC\apps\shared\.venv310\Scripts\python.exe` on the absolute `mp_ts.py` path. | Repo-relative `start_agm.cmd` at `5ca9a7c` (`python` on `PATH`, script next to the cmd). |
+| `C:\HC\apps\agm\start_agm.cmd` | Calls `C:\HC\apps\shared\.venv310\Scripts\python.exe` on the absolute `mp_ts.py` path. SHA-256 `22A3D5AD83A885BA0D9B94CAB217E866D7589026EC0A30E5077323DAAB77DB3E`. | Repo-relative `start_agm.cmd` at `5ca9a7c` (`python` on `PATH`, script next to the cmd). |
+| `C:\HC\apps\tcp\tcp_dashboard.py` | Layout edit versus `ee48aef`: NAV chart bottom margin 52 instead of 36. Blob hash `dce3dd4c0b95516ffcfc86f3f88ec4c26b4cf593` is not in the object store. Write time 13:54:18. | `tcp_dashboard.py` at `ee48aef`. The worktree file is a different uncommitted edit. |
+| `C:\HC\apps\tcp\tcp_public_sections.py` | Layout edit versus `ee48aef`: footnote margin, chart height, and two class names. Blob hash `6c0a669df3722845750d8ef3786c8336f9959890` is not in the object store. Write time 13:54:17. The `$50,000` account-stat tuple is unchanged. | `tcp_public_sections.py` at `ee48aef`. The worktree file is a different uncommitted edit. |
+| `C:\HC\apps\tcp\assets\styles.css` | NAV-chart wrap, z-index, and height rules versus `ee48aef`. Blob hash `f89b16f2540c7ae28cb894fda7dd61a5ac0d4b47` is not in the object store. Write time 13:54:21. | `assets/styles.css` at `ee48aef`. The worktree file is a different uncommitted edit. TKP `#NAV-graph .gtitle` rules are on `0a157c4`. |
+
+The YQ bytes and the absolute AGM launcher stay outside Git on purpose. The three TCP files are in-progress layout edits. This lane did not write them and does not commit them.
 
 `C:\HC\apps\shared\.venv310\Scripts\pwiz.py` also matched nothing. It is a virtualenv script, not application source.
 
-The served uploader UI is the built bundle `C:\HC\apps\uploader\static`. Its source is the frontend in `ee9fcfd`. This pass did not re-hash that bundle.
+The served uploader UI is the built bundle `C:\HC\apps\uploader\static`. Its source is the frontend in `ee9fcfd`. The built CSS and scripts under that directory are not blobs in `ee9fcfd`, `815b1d8`, `5ca9a7c`, or `ee48aef`.
 
 ## Superseded branches
 
-Do not close or delete these. GitHub PR state was not queried: `gh` is not authenticated on this host. Ancestry below is from the local object store plus `git ls-remote --heads origin`.
+Do not close or delete these. GitHub PR state was not queried. Ancestry below was rechecked from the local object store plus `git ls-remote --heads origin` (76 heads). The 54-tip set is unchanged. The 11 absent tips are unchanged. `ops/vps-production-rebuildability-20261010` is the one origin head that is in the clone and contained in neither production line.
 
 Still required as inputs. Not superseded:
 
 - `feature/uploader-chart-benchmark-refresh` `ee9fcfd`
-- `feature/tcp-benchmark-refresh-comparison-chart` `815b1d8`
-- `feature/vps-yq-loopback-healthz` `7a935e4` (already inside both children; still the named YQ logic commit)
+- `feature/tcp-benchmark-refresh-comparison-chart` origin `815b1d8`, local child `ee48aef` (not on origin; required for the TCP modules that match it; short of the three uncommitted layout files)
+- `feature/vps-yq-loopback-healthz` `7a935e4` (already inside both children and inside `ee48aef`; still the named YQ logic commit)
 - `refactor/github-vps-deployment-structure` `0a157c4` (not contained in `main` or `live-main`; local migration notes call it unmerged PR #65)
 - `preserve/vps-agm-production-20261010` `5ca9a7c`
+- `ops/vps-production-rebuildability-20261010` `a3aa50a` (rebuild docs, env copies, `install-production-services.ps1`, and `production-services.json` on top of `ee9fcfd`; not a code union)
 
 Superseded as a place to resume production work. Their tips are already inside a production commit. Leave the refs in place until a later cleanup, after the baseline exists.
 
@@ -254,38 +288,39 @@ These 11 remote tips are not in this clone's object store. This lane did not fet
 
 ## Worktrees to keep
 
-All four current worktrees stay until `production/vps-baseline` exists. None is dirty except the untracked cache called out below.
+All five current worktrees stay until `production/vps-baseline` exists. None is stale.
 
 | Path | HEAD | Why it stays |
 | --- | --- | --- |
-| `C:\HC\deployment\source\Tearsheet-Generator` | `ee9fcfd` on `feature/uploader-chart-benchmark-refresh` | Only checkout of the running uploader tip. Clean. |
-| `C:\HC\deployment\worktrees\tcp-benchmark-refresh-comparison-chart` | `815b1d8` on `feature/tcp-benchmark-refresh-comparison-chart` | Only checkout of the running TCP chart commit. |
+| `C:\HC\deployment\source\Tearsheet-Generator` | `ee9fcfd` on `feature/uploader-chart-benchmark-refresh` | Only checkout of the running uploader tip. Clean. Do not check out another branch here. |
+| `C:\HC\deployment\worktrees\tcp-benchmark-refresh-comparison-chart` | `ee48aef` on `feature/tcp-benchmark-refresh-comparison-chart` | Checkout of the local TCP tip. Dirty: uncommitted edits to `assets/styles.css`, `tcp_dashboard.py`, `tcp_public_sections.py`, `tcp_ts_v2.py`, `tests/test_tcp_comparison.py`, and `tests/test_tcp_dashboard.py`, plus untracked `_preview_verify` PNGs. Those edits are not the baseline. |
 | `C:\HC\deployment\worktrees\preserve-vps-agm-production-20261010` | `5ca9a7c` on `preserve/vps-agm-production-20261010` | Only checkout of the repo-relative AGM launcher. Also contains the `0a157c4` tree. Clean. |
 | `C:\HC\deployment\_pr65-deploy` | detached `0a157c4` | Pinned PR #65 snapshot of the TKP and path-resolver tree, without the AGM launcher commit. Clean. |
+| `C:\HC\deployment\worktrees\ops-vps-production-rebuildability-20261010` | `a3aa50a` on `ops/vps-production-rebuildability-20261010` | Pushed rebuild snapshot. Clean. Do not amend it and do not use it as the place that builds the code baseline. |
 
-`C:\HC\deployment\worktrees\tcp-benchmark-refresh-comparison-chart\_preflight_caches` is untracked (`tcp_benchmark_cache.json`, `tcp_benchmark_btc_cache.json`, `tcp_benchmark_eth_cache.json`). It is not source. Another lane may delete that directory if it is unused. Do not depend on it. The TCP worktree itself stays.
+`_preflight_caches` under the TCP worktree is absent. It was already removed as unused. Do not recreate it and do not depend on it.
 
-`feature/vps-yq-loopback-healthz` does not need its own worktree. Both `ee9fcfd` and `815b1d8` already contain that commit.
+`feature/vps-yq-loopback-healthz` does not need its own worktree. `ee9fcfd`, `815b1d8`, and `ee48aef` already contain that commit.
 
 ## Future sequence
 
 Do not start this sequence now. Do not merge, rebase, push, delete branches, delete worktrees, restart services, or edit `C:\HC\apps`.
 
 1. Leave this document as the review input. Leave `origin/main` at `f540135` and `origin/live-main` at `3cfda4f`.
-2. When the work is scheduled, add a new worktree. Create `production/vps-baseline` there from `7a935e4`. Do not use the four worktrees above as the place that moves.
-3. Bring in `815b1d8` and `ee9fcfd`. Their diffs from `7a935e4` touch no common path, so this step is the uploader fix plus the TCP chart commit on top of YQ `/healthz`. Review the result. Do not merge it to `main`.
-4. Copy `tkp_ts.py` and `tearsheet_paths.py` from `0a157c4`, with the TKP test that matches `tkp_ts.py`. Leave `yq_ts.py` at the `7a935e4` blob. Leave every running uploader path at the `ee9fcfd` blob. Leave the TCP chart paths at the `815b1d8` blobs.
+2. When the work is scheduled, add a new worktree. Create `production/vps-baseline` there from `7a935e4`. Do not use the five worktrees above as the place that moves. Do not commit the dirty TCP worktree as that step.
+3. Bring in `ee9fcfd` and the TCP commit that matches `C:\HC\apps\tcp`. `ee48aef` is that commit for `tcp_ts_v2.py`, `tcp_benchmarks.py`, `tcp_comparison.py`, and `tcp_nav_overlays.py`. It is not that commit for `tcp_dashboard.py`, `tcp_public_sections.py`, and `assets/styles.css` until those layout edits are committed and the hashes match. Recheck that the TCP path list from `7a935e4` still does not overlap `ee9fcfd`. Review the result. Do not merge it to `main`. Do not push `ee48aef` from this plan. Origin still names `815b1d8`.
+4. Copy `tkp_ts.py` and `tearsheet_paths.py` from `0a157c4`, with the TKP test that matches `tkp_ts.py`. Leave `yq_ts.py` at the `7a935e4` blob. Leave every running uploader path at the `ee9fcfd` blob. Leave the TCP paths at the TCP commit from step 3, not at `0a157c4`.
 5. Copy `start_agm.py` and `start_agm.cmd` from `5ca9a7c`. Leave the absolute-path launcher and the YQ mojibake out of the commit.
-6. Edit `assets/styles.css` so the TCP comparison-chart selectors and the TKP `#NAV-graph .gtitle` rules are both present. Record that edit in the commit message. Do not pick one deployed blob and drop the other.
-7. Review the baseline against the running entry points. Expected differences are only the YQ encoding (BOM, trailing newline, mojibake) and the absolute AGM launcher versus the repo-relative one. `db.py`, `main.py`, and `downstream_export.py` must still match the running uploader, not `0a157c4`.
+6. Edit `assets/styles.css` so the committed TCP NAV-chart rules and the TKP `#NAV-graph .gtitle` rules from `0a157c4` are both present. Record that edit in the commit message. `ee48aef` does not contain the `.gtitle` rules. The current deployed TCP sheet is not yet that commit.
+7. Review the baseline against the running entry points. Expected differences are the YQ encoding (BOM, CRLF, trailing newline, mojibake) and the absolute AGM launcher versus the repo-relative one. TCP dashboard, public sections, and `assets/styles.css` must match the commit chosen in step 3, including the layout edits if those are what `C:\HC\apps\tcp` still runs. `db.py`, `main.py`, and `downstream_export.py` must still match the running uploader, not `0a157c4`.
 8. In a separate review, list any `deployment/windows-vps` paths from `0a157c4` that should be added without the undeployed uploader edits. Do not run those scripts. Do not close PR #65.
 9. Push `production/vps-baseline` only after that review, and set its upstream then. Set upstreams on the five existing production branches only if someone is already pushing them for another reason. This plan does not push.
-10. After the baseline is on the remote, cut short-lived feature branches from it. Leave the old heads listed above until a cleanup that is outside this sequence. Do not delete the four worktrees until the baseline commit contains the files they were keeping.
+10. After the baseline is on the remote, cut short-lived feature branches from it. Leave the old heads listed above until a cleanup that is outside this sequence. Do not delete the five worktrees until the baseline commit contains the files they were keeping.
 
 ## This pass
 
-Written: `C:\HC\deployment\GIT_CONSOLIDATION_PLAN.md`.
+Lane C rechecked both documents on 2026-10-10. Updated: `C:\HC\deployment\GIT_CONSOLIDATION_PLAN.md` and `C:\HC\deployment\PRODUCTION_SOURCE_MAP.md`.
 
-Updated: `C:\HC\deployment\PRODUCTION_SOURCE_MAP.md` with the branch split, the same-named deployed copies, and the uploader modules that match `ee9fcfd` rather than `0a157c4`. The uploader commit `ee9fcfd` and the AGM commit `5ca9a7c` were already recorded and are still current.
+The uploader checkout stayed on `ee9fcfd`. `_preflight_caches` was not recreated. `a3aa50a` was not amended. The in-repo copies under `deployment/vps-production/` are the ops snapshot and were left as committed.
 
-Not committed.
+Not committed. Not merged. Not pushed.
