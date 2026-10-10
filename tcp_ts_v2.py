@@ -88,7 +88,7 @@ from tcp_benchmarks import (
     load_spxtr_benchmark_cache_only,
     resolve_runtime_benchmark,
 )
-from tcp_nav_overlays import build_nav_overlay_bundle
+from tcp_nav_overlays import build_nav_overlay_bundle, compact_selected_benchmark_attribution
 from tcp_dashboard import (
     GREY_BG,
     build_tcp_nav_chart_figure,
@@ -129,6 +129,8 @@ from tcp_public_sections import (
     TCP_OVERLAY_ETH_ID,
     TCP_NAV_PCT_AXIS_ID,
     TCP_OVERLAY_ATTRIBUTION_ID,
+    TCP_OVERLAY_SOURCE_ID,
+    TCP_OVERLAY_CUTOFF_STORE_ID,
     TCP_OVERLAY_STALE_ID,
     build_public_disclosure_panel,
     build_public_footer,
@@ -986,7 +988,8 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
         Output("tcp-benchmark-notice", "children"),
         Output("data-current-label-desktop", "children"),
         Output("data-current-label-mobile", "children"),
-        Output(TCP_OVERLAY_ATTRIBUTION_ID, "children"),
+        Output(TCP_OVERLAY_SOURCE_ID, "children"),
+        Output(TCP_OVERLAY_CUTOFF_STORE_ID, "data"),
         Output(TCP_OVERLAY_STALE_ID, "children"),
         Input("canonical-nav-store", "data"),
         Input("benchmark-store", "data"),
@@ -1013,12 +1016,6 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
             show_btc=show_btc,
             show_eth=show_eth,
         )
-        attribution_children = [
-            html.Span(
-                overlay_bundle.attribution_row or "",
-                className="tcp-overlay-attribution-text",
-            )
-        ]
         return (
             nav_figure,
             _monthly_table_component(propagation.monthly_calendar),
@@ -1027,8 +1024,27 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
             _benchmark_notice_component(benchmark_result),
             _desktop_label_children(propagation.desktop_label.header, propagation.desktop_label.date_line),
             _mobile_label_children(propagation.mobile_label.header, propagation.mobile_label.date_line),
-            attribution_children,
+            overlay_bundle.attribution_row or "",
+            {
+                "btc": overlay_bundle.btc_through_label,
+                "eth": overlay_bundle.eth_through_label,
+            },
             _overlay_stale_children(overlay_bundle),
+        )
+
+    @app.callback(
+        Output(TCP_OVERLAY_ATTRIBUTION_ID, "children"),
+        Input(TCP_OVERLAY_BTC_ID, "value"),
+        Input(TCP_OVERLAY_ETH_ID, "value"),
+        Input(TCP_OVERLAY_CUTOFF_STORE_ID, "data"),
+    )
+    def _compact_nav_footer_attribution(btc_overlay, eth_overlay, cutoff_store):
+        payload = cutoff_store or {}
+        return compact_selected_benchmark_attribution(
+            show_btc=_overlay_checklist_enabled(btc_overlay, "btc"),
+            show_eth=_overlay_checklist_enabled(eth_overlay, "eth"),
+            btc_through=payload.get("btc"),
+            eth_through=payload.get("eth"),
         )
 
     @app.callback(

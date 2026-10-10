@@ -39,7 +39,10 @@ from tcp_dashboard import (
     patch_nav_chart_pct_axis,
     propagate_tcp_dashboard,
 )
-from tcp_nav_overlays import build_nav_overlay_bundle
+from tcp_nav_overlays import (
+    build_nav_overlay_bundle,
+    compact_selected_benchmark_attribution,
+)
 from tcp_public_sections import build_nav_chart_section
 
 
@@ -162,6 +165,27 @@ def test_overlay_visibility_flags_on_rebuild():
     fig_tcp_only = build_tcp_nav_chart_figure(bundle, show_btc=False, show_eth=False)
     assert fig_tcp_only.data[1].visible is False
     assert fig_tcp_only.data[2].visible is False
+
+
+def test_compact_footer_attribution_follows_selected_overlays():
+    assert compact_selected_benchmark_attribution(
+        show_btc=False, show_eth=False, btc_through="October 08, 2026", eth_through="October 08, 2026"
+    ) == ""
+    assert compact_selected_benchmark_attribution(
+        show_btc=True, show_eth=False, btc_through="October 10, 2026", eth_through="October 08, 2026"
+    ) == "BTC: Yahoo Finance · through October 10, 2026"
+    assert compact_selected_benchmark_attribution(
+        show_btc=False, show_eth=True, btc_through="October 10, 2026", eth_through="October 08, 2026"
+    ) == "ETH: Yahoo Finance · through October 08, 2026"
+    assert compact_selected_benchmark_attribution(
+        show_btc=True, show_eth=True, btc_through="October 08, 2026", eth_through="October 08, 2026"
+    ) == "BTC/ETH: Yahoo Finance · through October 08, 2026"
+    assert compact_selected_benchmark_attribution(
+        show_btc=True, show_eth=True, btc_through="October 10, 2026", eth_through="October 08, 2026"
+    ) == (
+        "BTC: Yahoo Finance · through October 10, 2026 · "
+        "ETH: Yahoo Finance · through October 08, 2026"
+    )
 
 
 def test_overlay_attribution_names_price_provider():

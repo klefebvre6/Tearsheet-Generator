@@ -81,6 +81,43 @@ def compact_overlay_attribution_row(segments: Sequence[str]) -> str:
     return " · ".join(segment for segment in segments if segment)
 
 
+def benchmark_series_through_label(result: Optional[BenchmarkResult]) -> Optional[str]:
+    """Display date for one benchmark's own last price, independent of the other asset."""
+    if result is None or result.status == BENCHMARK_STATUS_UNAVAILABLE:
+        return None
+    if result.returns is None or result.returns.empty:
+        return None
+    end = _series_end(result.returns) or _as_timestamp(result.as_of)
+    if end is None:
+        return None
+    return _format_display_date(end)
+
+
+def compact_selected_benchmark_attribution(
+    *,
+    show_btc: bool,
+    show_eth: bool,
+    btc_through: Optional[str],
+    eth_through: Optional[str],
+) -> str:
+    """Short footer credit for the overlays that are actually turned on."""
+    selected: list[tuple[str, Optional[str]]] = []
+    if show_btc:
+        selected.append(("BTC", btc_through))
+    if show_eth:
+        selected.append(("ETH", eth_through))
+    if not selected:
+        return ""
+    dates = [label for _, label in selected if label]
+    if len(selected) == 2 and len(set(dates)) == 1 and dates:
+        return f"BTC/ETH: {BENCHMARK_PRICE_PROVIDER} · through {dates[0]}"
+    parts = []
+    for name, label in selected:
+        through = label or "unknown date"
+        parts.append(f"{name}: {BENCHMARK_PRICE_PROVIDER} · through {through}")
+    return " · ".join(parts)
+
+
 @dataclass(frozen=True)
 class NavOverlayBundle:
     tcp_dates: pd.DatetimeIndex
@@ -93,6 +130,8 @@ class NavOverlayBundle:
     attribution_row: str
     stale_notices: tuple[str, ...]
     price_cutoff_label: str
+    btc_through_label: Optional[str] = None
+    eth_through_label: Optional[str] = None
 
     @property
     def frame(self) -> pd.DataFrame:
@@ -176,6 +215,8 @@ def build_nav_overlay_bundle(
         attribution_row=compact_overlay_attribution_row(segments),
         stale_notices=notices,
         price_cutoff_label=overlay_price_cutoff_label(chart_through),
+        btc_through_label=benchmark_series_through_label(btc_result),
+        eth_through_label=benchmark_series_through_label(eth_result),
     )
 
 

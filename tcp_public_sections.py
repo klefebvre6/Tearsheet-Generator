@@ -61,6 +61,9 @@ TCP_NAV_PCT_AXIS_ID = "tcp-overlay-pct-axis"
 TCP_NAV_OVERLAY_CONTROLS_CLASS = "tcp-nav-overlay-controls"
 TCP_NAV_CHART_HEADER_CLASS = "tcp-nav-chart-header"
 TCP_OVERLAY_ATTRIBUTION_ID = "tcp-overlay-attribution"
+TCP_OVERLAY_SOURCE_ID = "tcp-overlay-source-detail"
+TCP_OVERLAY_CUTOFF_STORE_ID = "tcp-overlay-cutoff-store"
+TCP_NAV_DETAILS_ID = "tcp-nav-chart-details"
 TCP_OVERLAY_STALE_ID = "tcp-overlay-stale-notices"
 TCP_OVERLAY_NOTE_ID = "tcp-overlay-note"
 PREVIEW_BANNER_CLASS = "text-center fw-bold tcp-preview-banner"
@@ -786,12 +789,12 @@ def build_nav_footnotes() -> List[Any]:
     return [
         html.P(
             NAV_FOOTNOTE_PRIMARY,
-            className="text-center small tcp-nav-footnote-primary",
+            className="tcp-nav-footnote-primary",
             id="tcp-nav-footnote-primary",
         ),
         html.P(
             NAV_FOOTNOTE_SECONDARY,
-            className="text-center small tcp-nav-footnote-secondary",
+            className="tcp-nav-footnote-secondary",
             id="tcp-nav-footnote-secondary",
         ),
     ]
@@ -867,32 +870,55 @@ def build_nav_chart_section(figure: Any, overlay_bundle: Any) -> html.Div:
                         className=f"{NAV_CHART_CONTAINER_CLASS} {TCP_NAV_CHART_PLOT_WRAP_CLASS}",
                         id="tcp-nav-chart-container",
                     ),
-                    html.Div(
+                    dcc.Store(
+                        id=TCP_OVERLAY_CUTOFF_STORE_ID,
+                        data={
+                            "btc": getattr(overlay_bundle, "btc_through_label", None),
+                            "eth": getattr(overlay_bundle, "eth_through_label", None),
+                        },
+                    ),
+                    html.Details(
                         [
-                            html.Div(
+                            html.Summary(
                                 [
                                     html.Span(
-                                        attribution,
-                                        className="tcp-overlay-attribution-text",
-                                    )
+                                        "$50,000 baseline · TCP net of fees",
+                                        className="tcp-nav-footer-static",
+                                    ),
+                                    html.Span(
+                                        "",
+                                        id=TCP_OVERLAY_ATTRIBUTION_ID,
+                                        className="tcp-nav-footer-benchmark",
+                                    ),
+                                    html.Span("Details", className="tcp-nav-details-label"),
                                 ],
-                                className="text-center small tcp-overlay-attribution-row",
-                                id=TCP_OVERLAY_ATTRIBUTION_ID,
+                                className="tcp-nav-footer-summary",
                             ),
                             html.Div(
-                                stale_children,
-                                className="text-center small tcp-overlay-stale-row",
-                                id=TCP_OVERLAY_STALE_ID,
+                                [
+                                    html.Div(
+                                        stale_children,
+                                        className="tcp-overlay-stale-row",
+                                        id=TCP_OVERLAY_STALE_ID,
+                                    ),
+                                    html.P(
+                                        OVERLAY_DISCLOSURE,
+                                        className="tcp-overlay-note",
+                                        id=TCP_OVERLAY_NOTE_ID,
+                                    ),
+                                    html.P(
+                                        attribution,
+                                        className="tcp-overlay-source-detail",
+                                        id=TCP_OVERLAY_SOURCE_ID,
+                                    ),
+                                    *build_nav_footnotes(),
+                                ],
+                                className=TCP_NAV_CHART_NOTES_CLASS,
+                                id="tcp-nav-chart-notes",
                             ),
-                            html.P(
-                                OVERLAY_DISCLOSURE,
-                                className="text-center small tcp-overlay-note",
-                                id=TCP_OVERLAY_NOTE_ID,
-                            ),
-                            *build_nav_footnotes(),
                         ],
-                        className=TCP_NAV_CHART_NOTES_CLASS,
-                        id="tcp-nav-chart-notes",
+                        id=TCP_NAV_DETAILS_ID,
+                        className="tcp-nav-details",
                     ),
                 ],
                 className=TCP_NAV_CHART_SECTION_INNER_CLASS,
