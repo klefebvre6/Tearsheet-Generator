@@ -589,7 +589,8 @@ def patch_nav_chart_overlay_visibility(
     y_range = _visible_y_range(tcp_y, btc_y, eth_y, show_btc=show_btc, show_eth=show_eth)
     if y_range is not None:
         patched["layout"]["yaxis"]["range"] = y_range
-        _patch_nav_chart_yaxis2_range(patched, figure, y_range)
+        if _figure_shows_pct_axis(figure):
+            patched["layout"]["yaxis2"] = build_nav_pct_yaxis2(y_range, visible=True)
     patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
     return patched
 
@@ -602,22 +603,19 @@ def patch_nav_chart_pct_axis(
     show_eth: bool,
 ) -> Dict[str, Any]:
     """Show or hide the synchronized return (%) axis without rebuilding traces."""
-    from dash import Patch
-
-    figure = _figure_as_dict(figure)
-    patched = Patch()
+    figure = deepcopy(_figure_as_dict(figure))
     if not figure:
-        return patched
+        return figure
     margin = NAV_CHART_MARGIN_WITH_PCT_AXIS if show_pct_axis else NAV_CHART_MARGIN_DEFAULT
-    patched["layout"]["margin"] = dict(margin)
+    figure.setdefault("layout", {})["margin"] = dict(margin)
     dollar_range = _resolve_nav_chart_dollar_y_range(
         figure,
         show_btc=show_btc,
         show_eth=show_eth,
     )
-    patched["layout"]["yaxis2"] = build_nav_pct_yaxis2(dollar_range, visible=show_pct_axis)
-    patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
-    return patched
+    figure["layout"]["yaxis2"] = build_nav_pct_yaxis2(dollar_range, visible=show_pct_axis)
+    figure["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
+    return figure
 
 
 def patch_nav_chart_pct_axis_from_relayout(
@@ -625,10 +623,8 @@ def patch_nav_chart_pct_axis_from_relayout(
     relayout_data: Mapping[str, Any],
 ) -> Optional[Dict[str, Any]]:
     """Keep the right-hand % axis aligned with the primary dollar axis after zoom/pan."""
-    from dash import Patch
-
     figure = _figure_as_dict(figure)
-    if not figure or not _figure_shows_pct_axis(figure):
+    if not figure:
         return None
     if not relayout_data:
         return None
@@ -652,10 +648,11 @@ def patch_nav_chart_pct_axis_from_relayout(
         )
     if dollar_range is None:
         return None
-    patched = Patch()
-    patched["layout"]["yaxis2"]["range"] = dollar_range_to_pct_range(dollar_range)
-    patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
-    return patched
+    updated = deepcopy(figure)
+    layout = updated.setdefault("layout", {})
+    layout["yaxis2"] = build_nav_pct_yaxis2(dollar_range, visible=True)
+    layout["uirevision"] = layout.get("uirevision", NAV_CHART_UIREVISION)
+    return updated
 
 
 def _format_label_date(row_date: date) -> str:
