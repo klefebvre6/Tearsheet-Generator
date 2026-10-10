@@ -7,7 +7,7 @@ Remote: `https://github.com/klefebvre6/Tearsheet-Generator.git`
 
 Lane C rechecked the same clone on 2026-10-10 after the ops commit `a3aa50a` was already on origin. That lane did not commit, merge, rebase, push, fetch, delete a branch or worktree, restart a service, or check out another branch. The uploader checkout is still `feature/uploader-chart-benchmark-refresh` at `ee9fcfd`.
 
-`production/vps-baseline` now exists and is the current VPS source freeze. It includes TKP/YQ footer-fix source `be11d51a45e3ad173acf90f9941298bcbea2da2d`. Do not merge it into `main` or `live-main` yet.
+`production/vps-baseline` now exists at `472e1ddfad38382bf0e5f96813867b0de4ab5b9b` and is the current VPS source freeze. It includes TKP/YQ footer-fix source `be11d51a45e3ad173acf90f9941298bcbea2da2d`. Do not merge it into `main` or `live-main` yet.
 
 ## Closeout correction
 

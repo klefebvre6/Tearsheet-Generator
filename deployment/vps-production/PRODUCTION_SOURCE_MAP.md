@@ -8,6 +8,7 @@ Remote: `https://github.com/klefebvre6/Tearsheet-Generator.git`
 ## Current freeze
 
 Primary production source branch: `production/vps-baseline`.
+Baseline SHA: `472e1ddfad38382bf0e5f96813867b0de4ab5b9b`.
 This freeze includes the TKP/YQ footer fix from `be11d51a45e3ad173acf90f9941298bcbea2da2d` (`origin/fix/vps-tearsheet-footer-overlap-20261010`). AGM was audited and left unchanged. Uploader remains `ee9fcfd`. TCP executable Python and `assets/styles.css` LF-match unpushed local `b43d93ffebb3d97ff55ea61d7b3742e71968eeb1`; live `assets/nav_chart_fit.js` is newer than that commit and is copied into the baseline. Historical lineage below is preserved.
 
 No secret values are recorded here. `C:\HC\apps` was not modified by this freeze.
