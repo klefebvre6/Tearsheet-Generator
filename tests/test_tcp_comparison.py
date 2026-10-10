@@ -210,7 +210,7 @@ def test_unavailable_benchmark_does_not_crash_overlay():
     bundle = build_nav_overlay_bundle(records, missing, missing)
     fig = build_tcp_nav_chart_figure(bundle)
     assert fig is not None
-    assert len(fig.data) == 3
+    assert len(fig.data) == 4
 
 
 def test_existing_drawdown_calculations_unchanged(tmp_path):

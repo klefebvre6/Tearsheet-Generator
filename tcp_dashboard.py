@@ -506,6 +506,18 @@ def build_tcp_nav_chart_figure(
                 ),
             )
         )
+        fig.add_trace(
+            go.Scatter(
+                x=[dates[-1]],
+                y=[tcp_values[-1]],
+                mode="markers",
+                name="TCP % axis anchor",
+                yaxis="y2",
+                marker={"opacity": 0, "size": 1},
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
     y_range = None
     if overlay_bundle is not None and not overlay_bundle.tcp_nav.empty:
         y_range = _visible_y_range(
@@ -577,7 +589,7 @@ def _resolve_nav_chart_dollar_y_range(
     layout_range = figure.get("layout", {}).get("yaxis", {}).get("range")
     if layout_range and len(layout_range) == 2:
         return [float(layout_range[0]), float(layout_range[1])]
-    if not figure.get("data") or len(figure["data"]) < 3:
+    if not figure.get("data") or len(figure["data"]) < 4:
         return None
     return _visible_y_range(
         figure["data"][0].get("y", []),
@@ -614,7 +626,7 @@ def patch_nav_chart_overlay_visibility(
     patched = Patch()
     if not figure or not figure.get("data"):
         return patched
-    if len(figure["data"]) < 3:
+    if len(figure["data"]) < 4:
         return patched
     patched["data"][1]["visible"] = show_btc
     patched["data"][2]["visible"] = show_eth
