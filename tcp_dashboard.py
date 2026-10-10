@@ -301,18 +301,49 @@ def recompute_tcp_daily_metrics(
     )
 
 
-def build_tcp_nav_figure(
-    canonical_records: Sequence[Mapping[str, Any]],
-    *,
-    show_percentage_axis: bool = False,
-) -> go.Figure:
-    """Build TCP NAV chart from canonical records (no benchmark trace, no % axis by default)."""
-    if show_percentage_axis:
-        raise ValueError("TCP percentage NAV axis is out of scope for Step 7")
+NAV_CHART_TITLE = "<u>Non-Compounded NAV Since Inception</u>"
+NAV_CHART_UIREVISION = "tcp-nav-chart-v1"
+BTC_LINE_COLOR = "#F7931A"
+ETH_LINE_COLOR = "#627EEA"
+TCP_TRACE_NAME = "TCP"
 
-    nav_series = canonical_records_to_series(canonical_records)
-    if nav_series.empty:
-        fig = go.Figure()
+
+def _return_since_baseline(values: Sequence[float], baseline: float) -> List[float]:
+    if not baseline:
+        return [0.0 for _ in values]
+    return [float(value) / float(baseline) - 1.0 for value in values]
+
+
+def _visible_y_range(
+    tcp_values: Sequence[float],
+    btc_values: Sequence[float],
+    eth_values: Sequence[float],
+    *,
+    show_btc: bool,
+    show_eth: bool,
+) -> Optional[List[float]]:
+    values: List[float] = [float(v) for v in tcp_values if v is not None and math.isfinite(float(v))]
+    if show_btc:
+        values.extend(float(v) for v in btc_values if v is not None and math.isfinite(float(v)))
+    if show_eth:
+        values.extend(float(v) for v in eth_values if v is not None and math.isfinite(float(v)))
+    if not values:
+        return None
+    low = min(values)
+    high = max(values)
+    pad = max((high - low) * 0.05, 250.0)
+    return [low - pad, high + pad]
+
+
+def build_tcp_nav_chart_figure(
+    overlay_bundle: Any,
+    *,
+    show_btc: bool = False,
+    show_eth: bool = False,
+) -> go.Figure:
+    """Single NAV chart with optional BTC/ETH overlays. TCP accounting is unchanged."""
+    fig = go.Figure()
+    if overlay_bundle is None or overlay_bundle.tcp_nav.empty:
         fig.add_annotation(
             text="No NAV data available",
             xref="paper",
@@ -321,102 +352,133 @@ def build_tcp_nav_figure(
             y=0.5,
             showarrow=False,
         )
-        fig.update_layout(
-            title={
-                "text": "<u>Non-Compounded NAV Since Inception</u>",
-                "x": 0.5,
-                "xanchor": "center",
-            },
-            template="ggplot2",
-            plot_bgcolor=GREY_BG,
-            paper_bgcolor=WHITE_BG,
-            xaxis_title="Date",
-            yaxis_title="NAV",
-        )
-        return fig
-
-    fig = go.Figure(
-        go.Scatter(
-            x=nav_series.index,
-            y=nav_series.values,
-            mode="lines",
-            line={"color": PRIMARY_COLOR},
-            name="NAV",
-            hovertemplate="Date=%{x|%Y-%m-%d}<br>NAV=%{y:.3f}<extra></extra>",
-        )
-    )
-    fig.update_layout(
-        title={
-            "text": "<u>Non-Compounded NAV Since Inception</u>",
-            "x": 0.5,
-            "xanchor": "center",
-        },
-        template="ggplot2",
-        plot_bgcolor=GREY_BG,
-        paper_bgcolor=WHITE_BG,
-        xaxis_title="Date",
-        yaxis_title="NAV",
-        autosize=True,
-        margin={"l": 36, "r": 12, "t": 44, "b": 36},
-    )
-    fig.update_xaxes(showgrid=True, automargin=True, tickangle=-25)
-    fig.update_yaxes(showgrid=True, automargin=True)
-    return fig
-
-
-BTC_LINE_COLOR = "#F7931A"
-ETH_LINE_COLOR = "#627EEA"
-
-
-def build_tcp_comparison_figure(bundle: Any) -> go.Figure:
-    """Growth-of-$50,000 TCP/BTC/ETH figure. Does not touch ledger math."""
-    from tcp_comparison import COMPARISON_TITLE
-
-    frame = getattr(bundle, "frame", None)
-    fig = go.Figure()
-    if frame is None or frame.empty:
-        fig.add_annotation(
-            text="Comparison data unavailable",
-            xref="paper",
-            yref="paper",
-            x=0.5,
-            y=0.5,
-            showarrow=False,
-        )
     else:
-        traces = (
-            ("TCP", PRIMARY_COLOR, 2.4),
-            ("BTC", BTC_LINE_COLOR, 2.0),
-            ("ETH", ETH_LINE_COLOR, 2.0),
-        )
-        for name, color, width in traces:
-            if name not in frame.columns or frame[name].dropna().empty:
-                continue
-            fig.add_trace(
-                go.Scatter(
-                    x=frame.index,
-                    y=frame[name],
-                    mode="lines",
-                    name=name,
-                    line={"color": color, "width": width},
-                    hovertemplate="Date=%{x|%Y-%m-%d}<br>" + name + "=$%{y:,.2f}<extra></extra>",
-                )
+        dates = overlay_bundle.tcp_dates
+        tcp_values = overlay_bundle.tcp_nav.astype(float).tolist()
+        btc_values = overlay_bundle.btc_overlay.astype(float).tolist()
+        eth_values = overlay_bundle.eth_overlay.astype(float).tolist()
+        tcp_base = float(overlay_bundle.baseline_nav or tcp_values[0])
+        from tcp_comparison import OVERLAY_BASELINE
+
+        overlay_base = float(OVERLAY_BASELINE)
+        tcp_returns = _return_since_baseline(tcp_values, tcp_base)
+        btc_returns = _return_since_baseline(btc_values, overlay_base)
+        eth_returns = _return_since_baseline(eth_values, overlay_base)
+        fig.add_trace(
+            go.Scatter(
+                x=dates,
+                y=tcp_values,
+                mode="lines",
+                name=TCP_TRACE_NAME,
+                line={"color": PRIMARY_COLOR, "width": 2.4},
+                customdata=tcp_returns,
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    f"{TCP_TRACE_NAME}=$%{{y:,.2f}}<br>"
+                    "Return since inception=%{customdata:.2%}<extra></extra>"
+                ),
             )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=dates,
+                y=btc_values,
+                mode="lines",
+                name="BTC",
+                visible=show_btc,
+                line={"color": BTC_LINE_COLOR, "width": 2.0},
+                customdata=btc_returns,
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    "BTC=$%{y:,.2f}<br>"
+                    "Return since inception=%{customdata:.2%}<extra></extra>"
+                ),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=dates,
+                y=eth_values,
+                mode="lines",
+                name="ETH",
+                visible=show_eth,
+                line={"color": ETH_LINE_COLOR, "width": 2.0},
+                customdata=eth_returns,
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    "ETH=$%{y:,.2f}<br>"
+                    "Return since inception=%{customdata:.2%}<extra></extra>"
+                ),
+            )
+        )
+    y_range = None
+    if overlay_bundle is not None and not overlay_bundle.tcp_nav.empty:
+        y_range = _visible_y_range(
+            overlay_bundle.tcp_nav.astype(float).tolist(),
+            overlay_bundle.btc_overlay.astype(float).tolist(),
+            overlay_bundle.eth_overlay.astype(float).tolist(),
+            show_btc=show_btc,
+            show_eth=show_eth,
+        )
     fig.update_layout(
-        title={"text": COMPARISON_TITLE, "x": 0.5, "xanchor": "center"},
+        title={"text": NAV_CHART_TITLE, "x": 0.5, "xanchor": "center"},
         template="ggplot2",
         plot_bgcolor=GREY_BG,
         paper_bgcolor=WHITE_BG,
         xaxis_title="Date",
-        yaxis_title="Value",
+        yaxis_title="Value ($)",
         autosize=True,
-        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "center", "x": 0.5},
-        margin={"l": 48, "r": 12, "t": 56, "b": 36},
+        showlegend=False,
         hovermode="x unified",
+        uirevision=NAV_CHART_UIREVISION,
+        margin={"l": 48, "r": 12, "t": 56, "b": 36},
     )
     fig.update_xaxes(showgrid=True, automargin=True, tickangle=-25)
-    fig.update_yaxes(showgrid=True, automargin=True, tickprefix="$", tickformat=",.0f")
+    yaxis_kwargs: Dict[str, Any] = {"showgrid": True, "automargin": True, "tickprefix": "$", "tickformat": ",.0f"}
+    if y_range is not None:
+        yaxis_kwargs["range"] = y_range
+    fig.update_yaxes(**yaxis_kwargs)
     return fig
+
+
+def build_tcp_nav_figure(
+    canonical_records: Sequence[Mapping[str, Any]],
+    *,
+    show_percentage_axis: bool = False,
+) -> go.Figure:
+    """Backward-compatible TCP-only figure (tests and legacy callers)."""
+    if show_percentage_axis:
+        raise ValueError("TCP percentage NAV axis is out of scope for Step 7")
+    from tcp_nav_overlays import build_nav_overlay_bundle
+
+    bundle = build_nav_overlay_bundle(canonical_records, None, None)
+    return build_tcp_nav_chart_figure(bundle, show_btc=False, show_eth=False)
+
+
+def patch_nav_chart_overlay_visibility(
+    figure: Mapping[str, Any],
+    *,
+    show_btc: bool,
+    show_eth: bool,
+) -> Dict[str, Any]:
+    """Toggle overlay traces without rebuilding the figure (preserves zoom)."""
+    from dash import Patch
+
+    patched = Patch()
+    if not figure or not figure.get("data"):
+        return patched
+    if len(figure["data"]) < 3:
+        return patched
+    patched["data"][1]["visible"] = show_btc
+    patched["data"][2]["visible"] = show_eth
+    tcp_y = figure["data"][0].get("y", [])
+    btc_y = figure["data"][1].get("y", [])
+    eth_y = figure["data"][2].get("y", [])
+    y_range = _visible_y_range(tcp_y, btc_y, eth_y, show_btc=show_btc, show_eth=show_eth)
+    if y_range is not None:
+        patched["layout"]["yaxis"]["range"] = y_range
+    patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
+    return patched
 
 
 def _format_label_date(row_date: date) -> str:

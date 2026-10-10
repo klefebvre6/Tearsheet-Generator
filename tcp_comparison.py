@@ -1,53 +1,43 @@
 """
-Normalized TCP vs BTC vs ETH growth comparison.
+BTC/ETH overlay math for the TCP NAV chart.
 
 Side-effect free: no Dash, no network, no ledger/JSON state I/O.
 
 Methodology
 -----------
-Question answered: if $50,000 started in TCP, BTC, or ETH on TCP inception,
-what would each series be worth over time?
+TCP trace uses canonical ``nav-x1`` (non-compounded, net of fees).
 
-Common cutoff
+BTC / ETH overlays start at $50,000 on the TCP inception date. Each curve is
+built only from that asset's own daily total-return history (Yahoo Finance
+via quantstats/yfinance), not from TCP cash flows:
+
+    Overlay(t) = 50000 × Π (1 + r_i)  for inception < i <= t
+
+Common chart cutoff
     min(TCP latest completed date, BTC latest available date, ETH latest available date)
 
-    Crypto weekend observations after that cutoff are dropped so they cannot
-    imply extra comparison performance beyond the last comparable TCP date.
-
-TCP
-    Canonical strategy NAV series, scaled so the first in-window point equals
-    $50,000. Underlying TCP accounting is not changed.
-
-BTC / ETH
-    Start at $50,000 on TCP inception (day-0 snapshot). Subsequent daily
-    returns through the cutoff are compounded:
-
-        Growth(t) = 50000 × Π (1 + r_i)  for inception < i <= t
-
-    Weekend/holiday crypto returns on or before the cutoff are included in
-    that compound path. The published frame is then reindexed to TCP
-    observation dates (ffill of already-compounded values) so weekend-only
-    points never appear as extra x-axis observations.
+Overlay values are carried onto TCP observation dates (forward-filled) so
+weekend crypto moves appear on the next TCP trading date without adding
+extra x-axis points.
 
 No forward-looking dates. No interpolation of TCP onto dates it did not trade.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Mapping, Optional, Sequence, Union
 
 import pandas as pd
 
 from tcp_benchmarks import BENCHMARK_STATUS_UNAVAILABLE, BenchmarkResult
 from tcp_dashboard import canonical_records_to_series
 
-COMPARISON_BASELINE = 50_000.0
-COMPARISON_TITLE = "<u>Growth of $50,000 Since Inception</u>"
-COMPARISON_DISCLOSURE = (
-    "BTC and ETH are normalized to the same $50,000 starting value as one TCP "
-    "tranche for comparative purposes. Benchmark performance does not represent "
-    "an investment by TCP."
+OVERLAY_BASELINE = 50_000.0
+COMPARISON_BASELINE = OVERLAY_BASELINE
+OVERLAY_DISCLOSURE = (
+    "Optional BTC and ETH overlays are normalized to $50,000 on the TCP inception "
+    "date using each asset's own Yahoo Finance adjusted-close history (total return "
+    "since that date). They do not represent investments by TCP."
 )
 
 
@@ -122,39 +112,51 @@ def compound_benchmark_to_baseline(
     return out[~out.index.duplicated(keep="first")].sort_index().astype(float)
 
 
+def _reindex_growth_to_tcp_dates(growth: pd.Series, idx: pd.DatetimeIndex) -> pd.Series:
+    if growth is None or growth.empty:
+        return pd.Series(index=idx, dtype=float)
+    aligned = pd.Series(growth, dtype=float).copy()
+    aligned.index = pd.to_datetime(aligned.index).normalize()
+    aligned = aligned.sort_index()
+    union = aligned.index.union(idx)
+    return aligned.reindex(union).ffill().reindex(idx)
+
+
+def align_overlays_to_tcp_dates(
+    tcp_nav: pd.Series,
+    btc_growth: pd.Series,
+    eth_growth: pd.Series,
+) -> pd.DataFrame:
+    """Keep TCP observation dates only; carry compounded BTC/ETH values forward."""
+    if tcp_nav.empty:
+        return pd.DataFrame(columns=["TCP", "BTC", "ETH"])
+    idx = pd.DatetimeIndex(pd.to_datetime(tcp_nav.index).normalize())
+    return pd.DataFrame(
+        {
+            "TCP": pd.Series(tcp_nav.values, index=idx, dtype=float),
+            "BTC": _reindex_growth_to_tcp_dates(btc_growth, idx),
+            "ETH": _reindex_growth_to_tcp_dates(eth_growth, idx),
+        }
+    )
+
+
 def align_comparison_to_tcp_dates(
     tcp_norm: pd.Series,
     btc_growth: pd.Series,
     eth_growth: pd.Series,
 ) -> pd.DataFrame:
-    """Keep TCP observation dates only; carry compounded BTC/ETH values forward."""
-    if tcp_norm.empty:
-        return pd.DataFrame(columns=["TCP", "BTC", "ETH"])
-    idx = pd.DatetimeIndex(pd.to_datetime(tcp_norm.index).normalize())
+    return align_overlays_to_tcp_dates(tcp_norm, btc_growth, eth_growth)
 
-    def _onto_tcp(growth: pd.Series) -> pd.Series:
-        if growth is None or growth.empty:
-            return pd.Series(index=idx, dtype=float)
-        aligned = pd.Series(growth, dtype=float).copy()
-        aligned.index = pd.to_datetime(aligned.index).normalize()
-        aligned = aligned.sort_index()
-        union = aligned.index.union(idx)
-        return aligned.reindex(union).ffill().reindex(idx)
 
-    return pd.DataFrame(
-        {
-            "TCP": pd.Series(tcp_norm.values, index=idx, dtype=float),
-            "BTC": _onto_tcp(btc_growth),
-            "ETH": _onto_tcp(eth_growth),
-        }
-    )
+def overlay_price_cutoff_label(cutoff: Union[date, datetime, pd.Timestamp, str, None]) -> str:
+    stamp = _as_timestamp(cutoff)
+    if stamp is None:
+        return "Overlay price history unavailable."
+    return f"Overlay prices aligned through {stamp.strftime('%B %d, %Y')} (latest TCP ledger date)."
 
 
 def comparison_cutoff_label(cutoff: Union[date, datetime, pd.Timestamp, str, None]) -> str:
-    stamp = _as_timestamp(cutoff)
-    if stamp is None:
-        return "Comparison data unavailable."
-    return f"Comparison data through {stamp.strftime('%B %d, %Y')}"
+    return overlay_price_cutoff_label(cutoff)
 
 
 def benchmark_stale_notice(result: Optional[BenchmarkResult]) -> Optional[str]:
@@ -171,21 +173,6 @@ def benchmark_stale_notice(result: Optional[BenchmarkResult]) -> Optional[str]:
     return None
 
 
-@dataclass(frozen=True)
-class ComparisonBundle:
-    frame: pd.DataFrame
-    inception: Optional[pd.Timestamp]
-    cutoff: Optional[pd.Timestamp]
-    baseline: float
-    btc_status: str
-    eth_status: str
-    btc_as_of: Optional[str]
-    eth_as_of: Optional[str]
-    cutoff_label: str
-    disclosure: str
-    stale_notices: tuple[str, ...]
-
-
 def _result_returns(result: Optional[BenchmarkResult]) -> Optional[pd.Series]:
     if result is None or result.status == BENCHMARK_STATUS_UNAVAILABLE:
         return None
@@ -194,54 +181,3 @@ def _result_returns(result: Optional[BenchmarkResult]) -> Optional[pd.Series]:
     return result.returns
 
 
-def build_normalized_comparison_bundle(
-    canonical_records: Sequence[Mapping[str, Any]],
-    btc_result: Optional[BenchmarkResult] = None,
-    eth_result: Optional[BenchmarkResult] = None,
-    *,
-    baseline: float = COMPARISON_BASELINE,
-) -> ComparisonBundle:
-    nav = canonical_records_to_series(canonical_records)
-    btc_returns = _result_returns(btc_result)
-    eth_returns = _result_returns(eth_result)
-    inception = _series_end(nav.iloc[:1]) if not nav.empty else None
-    if not nav.empty:
-        inception = pd.Timestamp(nav.index.min()).normalize()
-    cutoff = common_comparison_cutoff(
-        _series_end(nav),
-        _series_end(btc_returns),
-        _series_end(eth_returns),
-    )
-    tcp_norm = normalize_tcp_to_baseline(nav, baseline=baseline, cutoff=cutoff)
-    if inception is not None and cutoff is not None:
-        btc_growth = compound_benchmark_to_baseline(
-            btc_returns, inception=inception, cutoff=cutoff, baseline=baseline
-        )
-        eth_growth = compound_benchmark_to_baseline(
-            eth_returns, inception=inception, cutoff=cutoff, baseline=baseline
-        )
-    else:
-        btc_growth = pd.Series(dtype=float)
-        eth_growth = pd.Series(dtype=float)
-    frame = align_comparison_to_tcp_dates(tcp_norm, btc_growth, eth_growth)
-    notices = tuple(
-        notice
-        for notice in (
-            benchmark_stale_notice(btc_result),
-            benchmark_stale_notice(eth_result),
-        )
-        if notice
-    )
-    return ComparisonBundle(
-        frame=frame,
-        inception=inception,
-        cutoff=cutoff,
-        baseline=float(baseline),
-        btc_status=btc_result.status if btc_result is not None else BENCHMARK_STATUS_UNAVAILABLE,
-        eth_status=eth_result.status if eth_result is not None else BENCHMARK_STATUS_UNAVAILABLE,
-        btc_as_of=btc_result.as_of if btc_result is not None else None,
-        eth_as_of=eth_result.as_of if eth_result is not None else None,
-        cutoff_label=comparison_cutoff_label(cutoff),
-        disclosure=COMPARISON_DISCLOSURE,
-        stale_notices=notices,
-    )

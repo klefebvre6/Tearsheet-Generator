@@ -1,4 +1,4 @@
-"""Normalized TCP/BTC/ETH comparison series and public-chart placement."""
+"""NAV overlay math and single-chart placement."""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -18,17 +18,24 @@ from tcp_benchmarks import (
     BenchmarkResult,
 )
 from tcp_comparison import (
-    COMPARISON_BASELINE,
-    COMPARISON_DISCLOSURE,
-    align_comparison_to_tcp_dates,
-    build_normalized_comparison_bundle,
+    OVERLAY_BASELINE,
+    OVERLAY_DISCLOSURE,
+    align_overlays_to_tcp_dates,
     common_comparison_cutoff,
-    comparison_cutoff_label,
     compound_benchmark_to_baseline,
     normalize_tcp_to_baseline,
+    overlay_price_cutoff_label,
 )
-from tcp_dashboard import build_tcp_comparison_figure, canonical_nav_records_from_ledger, propagate_tcp_dashboard
-from tcp_public_sections import COMPARISON_CHART_TITLE_PLAIN, build_comparison_chart_block
+from tcp_dashboard import (
+    NAV_CHART_TITLE,
+    build_tcp_nav_chart_figure,
+    build_tcp_nav_figure,
+    canonical_nav_records_from_ledger,
+    patch_nav_chart_overlay_visibility,
+    propagate_tcp_dashboard,
+)
+from tcp_nav_overlays import build_nav_overlay_bundle
+from tcp_public_sections import build_nav_chart_section
 
 
 def _series(values, start="2026-01-20", freq="D"):
@@ -48,20 +55,18 @@ def _ready(symbol: str, name: str, series: pd.Series, as_of: str | None = None) 
     )
 
 
-def test_tcp_btc_eth_normalized_series_start_at_50000():
-    tcp = _series([40000.0, 41000.0, 42000.0], start="2026-01-20", freq="B")
-    btc = _series([0.01, 0.02, -0.01], start="2026-01-20", freq="D")
-    eth = _series([0.00, 0.03, 0.01], start="2026-01-20", freq="D")
-    tcp_norm = normalize_tcp_to_baseline(tcp)
-    btc_norm = compound_benchmark_to_baseline(
-        btc, inception="2026-01-20", cutoff="2026-01-22"
-    )
-    eth_norm = compound_benchmark_to_baseline(
-        eth, inception="2026-01-20", cutoff="2026-01-22"
-    )
-    assert tcp_norm.iloc[0] == pytest.approx(COMPARISON_BASELINE)
-    assert btc_norm.iloc[0] == pytest.approx(COMPARISON_BASELINE)
-    assert eth_norm.iloc[0] == pytest.approx(COMPARISON_BASELINE)
+def test_tcp_btc_eth_overlay_start_at_50000_on_baseline():
+    records = [
+        {"Date": "2026-01-20", "NAV": 50000.0},
+        {"Date": "2026-01-21", "NAV": 51000.0},
+        {"Date": "2026-01-22", "NAV": 52000.0},
+    ]
+    btc = _ready(BTC_SYMBOL, "BTC", _series([0.01, 0.02, -0.01], start="2026-01-20", freq="D"))
+    eth = _ready(ETH_SYMBOL, "ETH", _series([0.00, 0.03, 0.01], start="2026-01-20", freq="D"))
+    bundle = build_nav_overlay_bundle(records, btc, eth)
+    assert bundle.tcp_nav.iloc[0] == pytest.approx(50000.0)
+    assert bundle.btc_overlay.iloc[0] == pytest.approx(OVERLAY_BASELINE)
+    assert bundle.eth_overlay.iloc[0] == pytest.approx(OVERLAY_BASELINE)
 
 
 def test_common_cutoff_is_min_of_required_series():
@@ -69,7 +74,7 @@ def test_common_cutoff_is_min_of_required_series():
     assert cutoff == pd.Timestamp("2026-10-07")
 
 
-def test_common_cutoff_respected_in_frame():
+def test_overlay_bundle_respects_cutoff():
     records = [
         {"Date": "2026-01-20", "NAV": 50000.0},
         {"Date": "2026-01-21", "NAV": 51000.0},
@@ -77,64 +82,67 @@ def test_common_cutoff_respected_in_frame():
     ]
     btc = _ready(BTC_SYMBOL, "BTC", _series([0.01, 0.02, 0.03, 0.04], start="2026-01-20", freq="D"))
     eth = _ready(ETH_SYMBOL, "ETH", _series([0.01, 0.02], start="2026-01-20", freq="D"))
-    bundle = build_normalized_comparison_bundle(records, btc, eth)
-    assert bundle.cutoff == pd.Timestamp("2026-01-21")
+    bundle = build_nav_overlay_bundle(records, btc, eth)
+    assert bundle.chart_price_through == pd.Timestamp("2026-01-21")
     assert bundle.frame.index.max() == pd.Timestamp("2026-01-21")
 
 
-def test_no_benchmark_observation_beyond_common_cutoff():
-    # TCP last completed Thursday; BTC/ETH continue through the weekend.
-    records = [
-        {"Date": "2026-10-07", "NAV": 50000.0},
-        {"Date": "2026-10-08", "NAV": 50500.0},
-    ]
-    crypto = _series([0.01, 0.02, 0.03, 0.04], start="2026-10-07", freq="D")
-    bundle = build_normalized_comparison_bundle(
+def test_tcp_nav_chart_preserves_raw_nav_values():
+    records = [{"Date": "2026-01-20", "NAV": 50013.472}, {"Date": "2026-01-21", "NAV": 50031.504}]
+    bundle = build_nav_overlay_bundle(records, None, None)
+    fig = build_tcp_nav_chart_figure(bundle)
+    assert fig.data[0].y[0] == pytest.approx(50013.472)
+    legacy = build_tcp_nav_figure(records)
+    assert legacy.data[0].y[0] == pytest.approx(50013.472)
+
+
+def test_overlay_visibility_flags_on_rebuild():
+    records = [{"Date": "2026-01-20", "NAV": 50000.0}, {"Date": "2026-01-21", "NAV": 51000.0}]
+    bundle = build_nav_overlay_bundle(
         records,
-        _ready(BTC_SYMBOL, "BTC", crypto),
-        _ready(ETH_SYMBOL, "ETH", crypto),
+        _ready(BTC_SYMBOL, "BTC", _series([0.01, 0.02], start="2026-01-20", freq="D")),
+        _ready(ETH_SYMBOL, "ETH", _series([0.01, 0.02], start="2026-01-20", freq="D")),
     )
-    assert bundle.cutoff == pd.Timestamp("2026-10-08")
-    assert bundle.frame.index.max() <= bundle.cutoff
-    assert pd.Timestamp("2026-10-10") not in bundle.frame.index
-    assert pd.Timestamp("2026-10-11") not in bundle.frame.index
+    fig = build_tcp_nav_chart_figure(bundle, show_btc=True, show_eth=False)
+    assert fig.data[1].visible is True
+    assert fig.data[2].visible is False
+    fig_tcp_only = build_tcp_nav_chart_figure(bundle, show_btc=False, show_eth=False)
+    assert fig_tcp_only.data[1].visible is False
+    assert fig_tcp_only.data[2].visible is False
 
 
-def test_align_comparison_keeps_only_tcp_dates():
-    tcp = _series([50000.0, 51000.0], start="2026-10-07", freq="D")
-    btc = _series([50000.0, 50100.0, 50200.0, 51000.0], start="2026-10-07", freq="D")
-    eth = _series([50000.0, 49900.0, 49800.0, 49700.0], start="2026-10-07", freq="D")
-    frame = align_comparison_to_tcp_dates(tcp, btc, eth)
-    assert list(frame.index) == list(tcp.index)
-
-
-def test_comparison_chart_title_and_disclosure_helpers():
-    assert "October 08, 2026" in comparison_cutoff_label("2026-10-08")
-    assert "$50,000" in COMPARISON_DISCLOSURE
-    assert "does not represent" in COMPARISON_DISCLOSURE.lower()
-
-
-def test_stale_benchmark_disclosure_renders():
+def test_overlay_attribution_names_price_provider():
     records = [{"Date": "2026-01-20", "NAV": 50000.0}, {"Date": "2026-01-21", "NAV": 50100.0}]
-    stale_btc = BenchmarkResult(
-        status=BENCHMARK_STATUS_STALE,
-        symbol=BTC_SYMBOL,
-        display_name="BTC",
-        as_of="2026-10-01",
-        fetched_at="2026-10-01T00:00:00+00:00",
-        returns=_series([0.01, 0.02], start="2026-01-20", freq="D"),
-        warning="Benchmark data is stale; showing last successful download.",
-    )
-    eth = _ready(ETH_SYMBOL, "ETH", _series([0.01, 0.02], start="2026-01-20", freq="D"))
-    bundle = build_normalized_comparison_bundle(records, stale_btc, eth)
-    block = build_comparison_chart_block(build_tcp_comparison_figure(bundle), bundle)
-    text = str(block)
-    assert "stale" in text.lower()
-    assert "2026-10-01" in text
-    assert "tcp-comparison-stale-notice" in text
+    btc = _ready(BTC_SYMBOL, "BTC", _series([0.01, 0.02], start="2026-01-20", freq="D"), as_of="2026-10-10")
+    eth = _ready(ETH_SYMBOL, "ETH", _series([0.01, 0.02], start="2026-01-20", freq="D"), as_of="2026-10-10")
+    bundle = build_nav_overlay_bundle(records, btc, eth)
+    assert "Yahoo Finance" in bundle.attribution_row
+    assert "BTC-USD" in bundle.attribution_row
+    assert "ETH-USD" in bundle.attribution_row
+    assert "prices through" in bundle.attribution_row
+    assert "cache refreshed" in bundle.attribution_row
 
 
-def test_unavailable_benchmark_does_not_crash_comparison():
+def test_single_nav_chart_layout_markers(layout_text):
+    nav_at = layout_text.find("Non-Compounded NAV Since Inception")
+    strategy_at = layout_text.find("Strategy Overview")
+    assert nav_at != -1
+    assert strategy_at != -1
+    assert nav_at < strategy_at
+    assert layout_text.count("nav-preview-graph") == 1
+    assert "tcp-comparison-graph" not in layout_text
+    assert "Growth of $50,000 Since Inception" not in layout_text
+    assert "tcp-overlay-btc" in layout_text
+    assert "tcp-overlay-eth" in layout_text
+    assert "tcp-overlay-attribution" in layout_text
+
+
+def test_overlay_disclosure_present(layout_text):
+    assert "$50,000" in OVERLAY_DISCLOSURE
+    assert "Yahoo Finance" in layout_text or "adjusted-close" in layout_text
+
+
+def test_unavailable_benchmark_does_not_crash_overlay():
     records = [{"Date": "2026-01-20", "NAV": 50000.0}, {"Date": "2026-01-21", "NAV": 50100.0}]
     missing = BenchmarkResult(
         status=BENCHMARK_STATUS_UNAVAILABLE,
@@ -145,10 +153,10 @@ def test_unavailable_benchmark_does_not_crash_comparison():
         returns=None,
         warning="BTC benchmark data is temporarily unavailable.",
     )
-    bundle = build_normalized_comparison_bundle(records, missing, missing)
-    fig = build_tcp_comparison_figure(bundle)
+    bundle = build_nav_overlay_bundle(records, missing, missing)
+    fig = build_tcp_nav_chart_figure(bundle)
     assert fig is not None
-    assert bundle.cutoff is None
+    assert len(fig.data) == 3
 
 
 def test_existing_drawdown_calculations_unchanged(tmp_path):
@@ -161,27 +169,13 @@ def test_existing_drawdown_calculations_unchanged(tmp_path):
     ledger = load_ledger(cfg.workbook_path, cfg.sheet_name)
     canonical = canonical_nav_records_from_ledger(ledger.completed_records)
     before = deepcopy(propagate_tcp_dashboard(canonical).drawdown_profile)
-    build_normalized_comparison_bundle(
+    build_nav_overlay_bundle(
         canonical,
         _ready(BTC_SYMBOL, "BTC", _series([0.001] * 20, start="2026-01-20", freq="D")),
         _ready(ETH_SYMBOL, "ETH", _series([0.001] * 20, start="2026-01-20", freq="D")),
     )
     after = propagate_tcp_dashboard(canonical).drawdown_profile
     assert before["TCP (Inception)"].equals(after["TCP (Inception)"])
-    assert list(before.columns) == list(after.columns)
-
-
-def test_comparison_does_not_write_state_json(tmp_path):
-    state_path = tmp_path / "tcp_daily_returns_secret_state.json"
-    state_path.write_text('{"revision": 89}', encoding="utf-8")
-    before = state_path.read_text(encoding="utf-8")
-    records = [{"Date": "2026-01-20", "NAV": 50000.0}, {"Date": "2026-01-21", "NAV": 50100.0}]
-    build_normalized_comparison_bundle(
-        records,
-        _ready(BTC_SYMBOL, "BTC", _series([0.01, 0.02], start="2026-01-20", freq="D")),
-        _ready(ETH_SYMBOL, "ETH", _series([0.01, 0.02], start="2026-01-20", freq="D")),
-    )
-    assert state_path.read_text(encoding="utf-8") == before
 
 
 @pytest.fixture(scope="module")
@@ -216,16 +210,37 @@ def layout_text():
     return text
 
 
-def test_comparison_chart_exists_below_nav_and_above_strategy(layout_text):
-    nav_at = layout_text.find("Non-Compounded NAV Since Inception")
-    growth_at = layout_text.find(COMPARISON_CHART_TITLE_PLAIN)
-    if growth_at < 0:
-        growth_at = layout_text.find("Growth of $50,000")
-    strategy_at = layout_text.find("Strategy Overview")
-    assert nav_at != -1
-    assert growth_at != -1
-    assert strategy_at != -1
-    assert nav_at < growth_at < strategy_at
-    assert "tcp-comparison-graph" in layout_text
-    assert "tcp-comparison-disclosure" in layout_text
-    assert "tcp-comparison-cutoff" in layout_text
+def test_live_btc_overlay_matches_compounded_history_on_tcp_dates():
+    cache = Path(r"C:\HC\data\tcp\benchmark\tcp_benchmark_btc_cache.json")
+    state = Path(r"C:\HC\data\tcp\tcp_daily_returns_secret_state.json")
+    if not cache.is_file() or not state.is_file():
+        pytest.skip("production data not available on this host")
+    import json
+
+    from tcp_benchmarks import BenchmarkResult
+    from tcp_comparison import align_overlays_to_tcp_dates
+
+    payload = json.loads(cache.read_text(encoding="utf-8"))
+    dates = [row["date"] for row in payload["returns"]]
+    values = [row["value"] for row in payload["returns"]]
+    returns = pd.Series(values, index=pd.to_datetime(dates), dtype=float)
+    btc = BenchmarkResult(
+        status=BENCHMARK_STATUS_READY,
+        symbol=BTC_SYMBOL,
+        display_name="BTC",
+        as_of=payload.get("as_of"),
+        fetched_at=payload.get("fetched_at"),
+        returns=returns,
+        warning=None,
+    )
+    eth = _ready(ETH_SYMBOL, "ETH", returns * 0 + 0.001)
+    ledger = json.loads(state.read_text(encoding="utf-8"))
+    records = [{"Date": row["Date"], "NAV": row["nav-x1"]} for row in ledger["records"]]
+    bundle = build_nav_overlay_bundle(records, btc, eth)
+    expected_growth = compound_benchmark_to_baseline(
+        returns,
+        inception=bundle.baseline_date,
+        cutoff=bundle.chart_price_through,
+    )
+    expected = align_overlays_to_tcp_dates(bundle.tcp_nav, expected_growth, bundle.eth_overlay)["BTC"]
+    pd.testing.assert_series_equal(bundle.btc_overlay, expected, check_names=False)

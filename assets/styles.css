@@ -538,11 +538,71 @@ body, #page-container {
 }
 
 #nav-preview-graph,
-#NAV-graph,
-#tcp-comparison-graph {
+#NAV-graph {
   width: 100% !important;
   height: auto !important;
   min-height: 320px;
+}
+
+.tcp-nav-chart-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  width: 95%;
+  max-width: 100%;
+  margin: 0 auto 0.35rem;
+}
+
+.tcp-nav-overlay-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.tcp-nav-overlay-label {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.tcp-nav-overlay-checklist {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.tcp-nav-overlay-btc-label {
+  color: #F7931A;
+}
+
+.tcp-nav-overlay-eth-label {
+  color: #627EEA;
+}
+
+.tcp-overlay-attribution-row {
+  width: 95%;
+  max-width: 100%;
+  margin: 0.35rem auto 0.25rem;
+  line-height: 1.45;
+}
+
+.tcp-overlay-attribution-text {
+  display: inline;
+}
+
+@media (min-width: 769px) {
+  .tcp-overlay-attribution-row {
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+}
+
+.tcp-overlay-stale-row {
+  width: 95%;
+  margin: 0 auto 0.25rem;
 }
 
 @media (min-width: 1024px) and (max-width: 1439px) {
@@ -834,16 +894,19 @@ body,
   }
 
   #nav-preview-graph,
-  #NAV-graph,
-  #tcp-comparison-graph {
+  #NAV-graph {
     min-height: 260px;
     max-height: 360px;
   }
 
-  .tcp-nav-chart-container,
-  .tcp-comparison-chart-container {
+  .tcp-nav-chart-container {
     width: 100%;
     max-width: 100%;
+  }
+
+  .tcp-nav-chart-header {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .tcp-two-column-row > [class*="col-"] {

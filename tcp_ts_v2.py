@@ -88,11 +88,12 @@ from tcp_benchmarks import (
     load_spxtr_benchmark_cache_only,
     resolve_runtime_benchmark,
 )
-from tcp_comparison import build_normalized_comparison_bundle
+from tcp_nav_overlays import build_nav_overlay_bundle
 from tcp_dashboard import (
     GREY_BG,
-    build_tcp_comparison_figure,
+    build_tcp_nav_chart_figure,
     build_tcp_current_data_labels,
+    patch_nav_chart_overlay_visibility,
     propagate_tcp_dashboard,
 )
 from tcp_ledger import TCPLedgerError
@@ -113,7 +114,6 @@ from tcp_public_sections import (
     HEADER_ROW_CLASS,
     MODE_ALERT_CLASS,
     MONTHLY_PERFORMANCE_CLASS,
-    NAV_CHART_CONTAINER_CLASS,
     POST_ACCOUNT_DISCLAIMERS_CLASS,
     PREVIEW_BANNER_CLASS,
     PUBLIC_CARD_CLASS,
@@ -124,8 +124,11 @@ from tcp_public_sections import (
     build_inline_performance_disclaimers,
     build_drawdown_profile_card,
     build_investor_information,
-    build_comparison_chart_block,
-    build_nav_footnotes,
+    build_nav_chart_section,
+    TCP_OVERLAY_BTC_ID,
+    TCP_OVERLAY_ETH_ID,
+    TCP_OVERLAY_ATTRIBUTION_ID,
+    TCP_OVERLAY_STALE_ID,
     build_public_disclosure_panel,
     build_public_footer,
     build_public_gate_wrapper,
@@ -441,12 +444,16 @@ def _resolve_benchmark_result(runtime_holder: Dict[str, Any]) -> BenchmarkResult
     )
 
 
-def _comparison_bundle(records: List[Dict[str, Any]], runtime_holder: Dict[str, Any]):
-    return build_normalized_comparison_bundle(
+def _overlay_bundle(records: List[Dict[str, Any]], runtime_holder: Dict[str, Any]):
+    return build_nav_overlay_bundle(
         records,
         _resolve_btc_benchmark_result(runtime_holder),
         _resolve_eth_benchmark_result(runtime_holder),
     )
+
+
+def _overlay_checklist_enabled(values: Optional[List[str]], token: str) -> bool:
+    return token in (values or [])
 
 
 def _benchmark_notice_component(result: BenchmarkResult) -> html.Div:
@@ -477,8 +484,8 @@ def build_preview_layout(
         holder,
         benchmark_result,
     )
-    comparison_bundle = _comparison_bundle(snapshot.canonical_nav, holder)
-    comparison_figure = build_tcp_comparison_figure(comparison_bundle)
+    overlay_bundle = _overlay_bundle(snapshot.canonical_nav, holder)
+    nav_figure = build_tcp_nav_chart_figure(overlay_bundle, show_btc=False, show_eth=False)
     mode_alert = (
         "JSON state is authoritative. Authenticated Add/Delete persist to preview JSON."
         if cfg.persistence_enabled and snapshot.data_source == "json"
@@ -563,18 +570,7 @@ def build_preview_layout(
                 ),
                 build_firm_intro(),
                 *mode_alert_block,
-                html.Div(
-                    dcc.Graph(
-                        id="nav-preview-graph",
-                        figure=propagation.nav_figure,
-                        config={"displayModeBar": False, "responsive": True},
-                        style={"width": "100%", "maxWidth": "100%", "maxHeight": "400px", "pageBreakInside": "avoid"},
-                    ),
-                    className=NAV_CHART_CONTAINER_CLASS,
-                    id="tcp-nav-chart-container",
-                ),
-                *build_nav_footnotes(),
-                build_comparison_chart_block(comparison_figure, comparison_bundle),
+                build_nav_chart_section(nav_figure, overlay_bundle),
                 html.H5("Performance Summary", className="text-center mb-2"),
                 html.Div(_monthly_table_component(propagation.monthly_calendar), id="monthly-calendar-container"),
                 build_two_column_shell_row(
@@ -969,6 +965,17 @@ def apply_tcp_recalculation(
     }
 
 
+def _overlay_stale_children(bundle: Any) -> List[Any]:
+    return [
+        html.Span(
+            notice,
+            className="text-muted tcp-overlay-stale-notice",
+            id=f"tcp-overlay-stale-notice-{index}",
+        )
+        for index, notice in enumerate(getattr(bundle, "stale_notices", ()) or ())
+    ]
+
+
 def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any]) -> None:
     @app.callback(
         Output("nav-preview-graph", "figure"),
@@ -978,13 +985,14 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
         Output("tcp-benchmark-notice", "children"),
         Output("data-current-label-desktop", "children"),
         Output("data-current-label-mobile", "children"),
-        Output("tcp-comparison-graph", "figure"),
-        Output("tcp-comparison-cutoff", "children"),
-        Output("tcp-comparison-stale-notices", "children"),
+        Output(TCP_OVERLAY_ATTRIBUTION_ID, "children"),
+        Output(TCP_OVERLAY_STALE_ID, "children"),
         Input("canonical-nav-store", "data"),
         Input("benchmark-store", "data"),
+        State(TCP_OVERLAY_BTC_ID, "value"),
+        State(TCP_OVERLAY_ETH_ID, "value"),
     )
-    def _propagate_dashboard_outputs(canonical_data, benchmark_data):
+    def _propagate_dashboard_outputs(canonical_data, benchmark_data, btc_overlay, eth_overlay):
         records = canonical_data or []
         benchmark_result = (
             BenchmarkResult.from_store_dict(benchmark_data)
@@ -996,26 +1004,48 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
             runtime_holder,
             benchmark_result,
         )
-        comparison_bundle = _comparison_bundle(records, runtime_holder)
-        stale_children = [
-            html.P(
-                notice,
-                className="text-center small text-muted tcp-comparison-stale-notice",
-                id=f"tcp-comparison-stale-notice-{index}",
+        overlay_bundle = _overlay_bundle(records, runtime_holder)
+        show_btc = _overlay_checklist_enabled(btc_overlay, "btc")
+        show_eth = _overlay_checklist_enabled(eth_overlay, "eth")
+        nav_figure = build_tcp_nav_chart_figure(
+            overlay_bundle,
+            show_btc=show_btc,
+            show_eth=show_eth,
+        )
+        attribution_children = [
+            html.Span(
+                overlay_bundle.attribution_row or "",
+                className="tcp-overlay-attribution-text",
             )
-            for index, notice in enumerate(comparison_bundle.stale_notices)
         ]
         return (
-            propagation.nav_figure,
+            nav_figure,
             _monthly_table_component(propagation.monthly_calendar),
             _daily_perf_table_component(propagation.daily_performance),
             _drawdown_table_component(propagation.drawdown_profile),
             _benchmark_notice_component(benchmark_result),
             _desktop_label_children(propagation.desktop_label.header, propagation.desktop_label.date_line),
             _mobile_label_children(propagation.mobile_label.header, propagation.mobile_label.date_line),
-            build_tcp_comparison_figure(comparison_bundle),
-            comparison_bundle.cutoff_label,
-            stale_children,
+            attribution_children,
+            _overlay_stale_children(overlay_bundle),
+        )
+
+    @app.callback(
+        Output("nav-preview-graph", "figure", allow_duplicate=True),
+        Input(TCP_OVERLAY_BTC_ID, "value"),
+        Input(TCP_OVERLAY_ETH_ID, "value"),
+        State("nav-preview-graph", "figure"),
+        prevent_initial_call=True,
+    )
+    def _toggle_nav_overlays(btc_overlay, eth_overlay, figure):
+        if not figure:
+            raise PreventUpdate
+        show_btc = _overlay_checklist_enabled(btc_overlay, "btc")
+        show_eth = _overlay_checklist_enabled(eth_overlay, "eth")
+        return patch_nav_chart_overlay_visibility(
+            figure,
+            show_btc=show_btc,
+            show_eth=show_eth,
         )
 
 

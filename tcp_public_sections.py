@@ -52,8 +52,13 @@ PUBLIC_CARD_CLASS = "mb-4 tcp-public-card"
 DESKTOP_TWO_COLUMN_ROW_CLASS = "mb-2 tcp-two-column-row"
 MONTHLY_PERFORMANCE_CLASS = "table-responsive tcp-monthly-performance"
 NAV_CHART_CONTAINER_CLASS = "tcp-nav-chart-container"
-COMPARISON_CHART_CONTAINER_CLASS = "tcp-nav-chart-container tcp-comparison-chart-container"
-COMPARISON_CHART_TITLE_PLAIN = "Growth of $50,000 Since Inception"
+TCP_OVERLAY_BTC_ID = "tcp-overlay-btc"
+TCP_OVERLAY_ETH_ID = "tcp-overlay-eth"
+TCP_NAV_OVERLAY_CONTROLS_CLASS = "tcp-nav-overlay-controls"
+TCP_NAV_CHART_HEADER_CLASS = "tcp-nav-chart-header"
+TCP_OVERLAY_ATTRIBUTION_ID = "tcp-overlay-attribution"
+TCP_OVERLAY_STALE_ID = "tcp-overlay-stale-notices"
+TCP_OVERLAY_NOTE_ID = "tcp-overlay-note"
 PREVIEW_BANNER_CLASS = "text-center fw-bold tcp-preview-banner"
 MODE_ALERT_CLASS = "tcp-mode-alert"
 DAILY_METRICS_TABLE_CLASS = "fixed-cols tcp-daily-metrics-table"
@@ -146,8 +151,9 @@ disclaimer_text = GENERAL_DISCLAIMER_TEXT
 footer_contact = FOOTER_CONTACT
 
 NAV_FOOTNOTE_PRIMARY = (
-    "This chart visualizes the growth of a $50,000 investment from inception to today. "
-    "NAV stands for Net Asset Value; it reflects the non-compounded performance, net of all fees."
+    "This chart visualizes the growth of a $50,000 investment from inception through the "
+    "latest completed ledger date. NAV stands for Net Asset Value; it reflects the "
+    "non-compounded performance, net of all fees."
 )
 
 NAV_FOOTNOTE_SECONDARY = (
@@ -217,7 +223,7 @@ def mobile_responsive_contract() -> Dict[str, str]:
         "drawdown_table": DRAWDOWN_TABLE_CLASS,
         "drawdown_section": DRAWDOWN_SECTION_CLASS,
         "nav_chart_container": NAV_CHART_CONTAINER_CLASS,
-        "comparison_chart_container": COMPARISON_CHART_CONTAINER_CLASS,
+        "nav_overlay_controls": TCP_NAV_OVERLAY_CONTROLS_CLASS,
         "two_column_row": DESKTOP_TWO_COLUMN_ROW_CLASS,
         "disclosure_panel": "tcp-public-disclosure-panel",
         "daily_values_section": "tcp-daily-values-section",
@@ -255,7 +261,7 @@ def desktop_visual_contract() -> Dict[str, str]:
         "public_card": PUBLIC_CARD_CLASS,
         "monthly_performance": MONTHLY_PERFORMANCE_CLASS,
         "nav_chart_container": NAV_CHART_CONTAINER_CLASS,
-        "comparison_chart_container": COMPARISON_CHART_CONTAINER_CLASS,
+        "nav_overlay_controls": TCP_NAV_OVERLAY_CONTROLS_CLASS,
         "preview_banner": PREVIEW_BANNER_CLASS,
         "daily_metrics_table": DAILY_METRICS_TABLE_CLASS,
         "drawdown_table": DRAWDOWN_TABLE_CLASS,
@@ -789,49 +795,88 @@ def build_nav_footnotes() -> List[Any]:
     ]
 
 
-def build_comparison_chart_block(figure: Any, bundle: Any) -> html.Div:
-    """Public Growth of $50,000 chart plus cutoff / stale disclosure."""
+def build_nav_overlay_controls() -> html.Div:
+    return html.Div(
+        [
+            html.Span("Overlays:", className="tcp-nav-overlay-label"),
+            dbc.Checklist(
+                options=[{"label": " BTC", "value": "btc"}],
+                value=[],
+                id=TCP_OVERLAY_BTC_ID,
+                inline=True,
+                className="tcp-nav-overlay-checklist tcp-nav-overlay-btc",
+                inputClassName="tcp-nav-overlay-input",
+                labelClassName="tcp-nav-overlay-check-label tcp-nav-overlay-btc-label",
+            ),
+            dbc.Checklist(
+                options=[{"label": " ETH", "value": "eth"}],
+                value=[],
+                id=TCP_OVERLAY_ETH_ID,
+                inline=True,
+                className="tcp-nav-overlay-checklist tcp-nav-overlay-eth",
+                inputClassName="tcp-nav-overlay-input",
+                labelClassName="tcp-nav-overlay-check-label tcp-nav-overlay-eth-label",
+            ),
+        ],
+        className=TCP_NAV_OVERLAY_CONTROLS_CLASS,
+        id="tcp-nav-overlay-controls",
+    )
+
+
+def build_nav_chart_section(figure: Any, overlay_bundle: Any) -> html.Div:
+    """Single NAV chart with optional overlay controls and benchmark attribution."""
+    from tcp_comparison import OVERLAY_DISCLOSURE
+
     stale_children: List[Any] = []
-    for index, notice in enumerate(getattr(bundle, "stale_notices", ()) or ()):
+    for index, notice in enumerate(getattr(overlay_bundle, "stale_notices", ()) or ()):
         stale_children.append(
-            html.P(
+            html.Span(
                 notice,
-                className="text-center small text-muted tcp-comparison-stale-notice",
-                id=f"tcp-comparison-stale-notice-{index}",
+                className="text-muted tcp-overlay-stale-notice",
+                id=f"tcp-overlay-stale-notice-{index}",
             )
         )
+    attribution = getattr(overlay_bundle, "attribution_row", "") or ""
     return html.Div(
         [
             html.Div(
+                build_nav_overlay_controls(),
+                className=TCP_NAV_CHART_HEADER_CLASS,
+                id="tcp-nav-chart-header",
+            ),
+            html.Div(
                 dcc.Graph(
-                    id="tcp-comparison-graph",
+                    id="nav-preview-graph",
                     figure=figure,
                     config={"displayModeBar": False, "responsive": True},
                     style={"width": "100%", "maxWidth": "100%", "maxHeight": "400px", "pageBreakInside": "avoid"},
                 ),
-                className=COMPARISON_CHART_CONTAINER_CLASS,
-                id="tcp-comparison-chart-container",
+                className=NAV_CHART_CONTAINER_CLASS,
+                id="tcp-nav-chart-container",
+            ),
+            html.Div(
+                [
+                    html.Span(
+                        attribution,
+                        className="tcp-overlay-attribution-text",
+                    )
+                ],
+                className="text-center small tcp-overlay-attribution-row",
+                id=TCP_OVERLAY_ATTRIBUTION_ID,
+            ),
+            html.Div(
+                stale_children,
+                className="text-center small tcp-overlay-stale-row",
+                id=TCP_OVERLAY_STALE_ID,
             ),
             html.P(
-                getattr(bundle, "cutoff_label", "Comparison data unavailable."),
+                OVERLAY_DISCLOSURE,
                 className="text-center small",
-                id="tcp-comparison-cutoff",
+                id=TCP_OVERLAY_NOTE_ID,
             ),
-            html.P(
-                getattr(
-                    bundle,
-                    "disclosure",
-                    "BTC and ETH are normalized to the same $50,000 starting value as one TCP "
-                    "tranche for comparative purposes. Benchmark performance does not represent "
-                    "an investment by TCP.",
-                ),
-                className="text-center small",
-                style={"marginBottom": "3rem"},
-                id="tcp-comparison-disclosure",
-            ),
-            html.Div(stale_children, id="tcp-comparison-stale-notices"),
+            *build_nav_footnotes(),
         ],
-        id="tcp-comparison-section",
+        id="tcp-nav-chart-section",
         className=PUBLIC_SECTION_CLASS,
     )
 
