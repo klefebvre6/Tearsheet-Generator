@@ -667,7 +667,11 @@ body, #page-container {
   outline-offset: 3px;
 }
 
-.tcp-nav-chart-notes {
+.tcp-nav-details:not([open]) > .tcp-nav-chart-notes {
+  display: none;
+}
+
+.tcp-nav-details[open] > .tcp-nav-chart-notes {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
