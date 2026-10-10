@@ -111,6 +111,8 @@ TRADING_DAYS_PER_YEAR = 252
 BUSINESS_DAYS_PER_YEAR = 365
 BASELINE_AMOUNT = 150000
 NOMINAL_ASSETS = 300000
+NAV_CHART_MARGIN_DEFAULT = {"l": 40, "r": 10, "t": 40, "b": 64}
+NAV_CHART_MARGIN_WITH_PCT_AXIS = {"l": 40, "r": 70, "t": 40, "b": 64}
 ACCOUNT_COUNT = 4
 OPEN_ACCOUNTS = 2
 CLOSED_PROFITABLE = 2
@@ -1948,13 +1950,13 @@ def build_NAV_figure():
             "showgrid": False,
             "zeroline": False,
         }
-        layout_config["margin"] = {"l": 40, "r": 70, "t": 40, "b": 40}
+        layout_config["margin"] = dict(NAV_CHART_MARGIN_WITH_PCT_AXIS)
     else:
         # No secondary axis, use standard margins
-        layout_config["margin"] = {"l": 40, "r": 10, "t": 40, "b": 40}
+        layout_config["margin"] = dict(NAV_CHART_MARGIN_DEFAULT)
 
     fig.update_layout(**layout_config)
-    fig.update_xaxes(showgrid=True)
+    fig.update_xaxes(showgrid=True, automargin=True, title_standoff=16)
     fig.update_yaxes(showgrid=True)
     return fig
 
@@ -2109,32 +2111,37 @@ def serve_layout(records=None):
             ),
 
             # ── NAV Chart ─────────────────────────────────────────────────────
-            dcc.Graph(
-                id="NAV-graph",
-                figure=build_NAV_figure(),
-                config={"displayModeBar": False, "responsive": True},
-                style={
-                    "width": "100%",
-                    "maxWidth": "100%",  # Ensure it doesn't exceed page width
-                    "maxHeight": "400px",  # Cap height to fit on page
-                    "pageBreakInside": "avoid",
-                    #"overflow": "hidden",  # Prevent overflow
-                },
-            ),
-            html.P(
-                "This chart visualizes cash-flow-adjusted StoneX trading performance from a "
-                f"${BASELINE_AMOUNT:,.0f} baseline. Deposits and withdrawals do not create "
-                "artificial gains or losses; broker StoneX balances in the data tables remain "
-                "actual account values.",
-                className="text-center small",
-                style={"marginTop": "4rem"}  # gives some breathing room
-            ),
-
-            html.P(
-                "Please note that all percentages shown are relative to the initial amount invested. "
-                "Also note that performance may vary depending on the time of entry due to the fixed-sizing nature of this strategy.",
-                className="text-center small",
-                style={"marginBottom": "3rem"}
+            html.Div(
+                [
+                    html.Div(
+                        dcc.Graph(
+                            id="NAV-graph",
+                            figure=build_NAV_figure(),
+                            config={"displayModeBar": False, "responsive": True},
+                            style={"width": "100%", "height": "100%"},
+                        ),
+                        className="tearsheet-nav-chart-plot-wrap",
+                        id="tkp-nav-chart-container",
+                    ),
+                    html.Div(
+                        [
+                            html.P(
+                                "This chart visualizes cash-flow-adjusted StoneX trading performance from a "
+                                f"${BASELINE_AMOUNT:,.0f} baseline. Deposits and withdrawals do not create "
+                                "artificial gains or losses; broker StoneX balances in the data tables remain "
+                                "actual account values.",
+                                className="text-center small tearsheet-nav-footnote-primary",
+                            ),
+                            html.P(
+                                "Please note that all percentages shown are relative to the initial amount invested. "
+                                "Also note that performance may vary depending on the time of entry due to the fixed-sizing nature of this strategy.",
+                                className="text-center small tearsheet-nav-footnote-secondary",
+                            ),
+                        ],
+                        className="tearsheet-nav-chart-notes",
+                    ),
+                ],
+                className="tearsheet-nav-chart-section",
             ),
 
             # ── Performance Summary ────────────────────────────────────────────
@@ -4203,11 +4210,11 @@ def _rebuild_nav_figure(perf_series):
             "ticktext": [f"{p:.0f}%" for p in ticks],
             "showgrid": False, "zeroline": False,
         }
-        cfg["margin"] = {"l": 40, "r": 70, "t": 40, "b": 40}
+        cfg["margin"] = dict(NAV_CHART_MARGIN_WITH_PCT_AXIS)
     else:
-        cfg["margin"] = {"l": 40, "r": 10, "t": 40, "b": 40}
+        cfg["margin"] = dict(NAV_CHART_MARGIN_DEFAULT)
     fig.update_layout(**cfg)
-    fig.update_xaxes(showgrid=True)
+    fig.update_xaxes(showgrid=True, automargin=True, title_standoff=16)
     fig.update_yaxes(showgrid=True)
     return fig
 

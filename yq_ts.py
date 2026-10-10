@@ -1050,10 +1050,10 @@ def build_NAV_figure():
         xaxis_title="Date",
         yaxis_title="Normalized NAV ($100k baseline)",
         autosize=True,               # ← responsive sizing
-        margin={"l": 40, "r": 10, "t": 40, "b": 40}
+        margin={"l": 40, "r": 10, "t": 40, "b": 64}
     )
 
-    fig.update_xaxes(showgrid=True)
+    fig.update_xaxes(showgrid=True, automargin=True, title_standoff=16)
     fig.update_yaxes(showgrid=True)
     return fig
 
@@ -1241,30 +1241,35 @@ def serve_layout():
             ),
 
             # ── NAV Chart ─────────────────────────────────────────────────────
-            dcc.Graph(
-                id="NAV-graph",
-                figure=build_NAV_figure(),
-                config={"displayModeBar": False, "responsive": True},
-                style={
-                    "width": "100%",
-                    "maxWidth": "100%",  # Ensure it doesn't exceed page width
-                    "maxHeight": "400px",  # Cap height to fit on page
-                    "pageBreakInside": "avoid",
-                    #"overflow": "hidden",  # Prevent overflow
-                },
-            ),
-            html.P(
-                "This chart visualizes the growth of a $100,000 investment from inception to today. "
-                "NAV stands for Net Asset Value; it reflects the compounded performance, net of all fees.",
-                className="text-center small",
-                style={"marginTop": "4rem"}  # gives some breathing room
-            ),
-
-            html.P(
-                "This chart shows the compounded growth of the Blue Whale Program from inception to present. "
-                "All profits are reinvested and compounded over time, demonstrating the power of systematic options selling.",
-                className="text-center small",
-                style={"marginBottom": "3rem"}
+            html.Div(
+                [
+                    html.Div(
+                        dcc.Graph(
+                            id="NAV-graph",
+                            figure=build_NAV_figure(),
+                            config={"displayModeBar": False, "responsive": True},
+                            style={"width": "100%", "height": "100%"},
+                        ),
+                        className="tearsheet-nav-chart-plot-wrap",
+                        id="yq-nav-chart-container",
+                    ),
+                    html.Div(
+                        [
+                            html.P(
+                                "This chart visualizes the growth of a $100,000 investment from inception to today. "
+                                "NAV stands for Net Asset Value; it reflects the compounded performance, net of all fees.",
+                                className="text-center small tearsheet-nav-footnote-primary",
+                            ),
+                            html.P(
+                                "This chart shows the compounded growth of the Blue Whale Program from inception to present. "
+                                "All profits are reinvested and compounded over time, demonstrating the power of systematic options selling.",
+                                className="text-center small tearsheet-nav-footnote-secondary",
+                            ),
+                        ],
+                        className="tearsheet-nav-chart-notes",
+                    ),
+                ],
+                className="tearsheet-nav-chart-section",
             ),
 
 
