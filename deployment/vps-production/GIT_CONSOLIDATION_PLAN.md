@@ -5,7 +5,9 @@ Inspected: 2026-10-10
 Checkout: `C:\HC\deployment\source\Tearsheet-Generator`
 Remote: `https://github.com/klefebvre6/Tearsheet-Generator.git`
 
-Lane C rechecked the same clone on 2026-10-10 after the ops commit `a3aa50a` was already on origin. That lane did not commit, merge, rebase, push, fetch, delete a branch or worktree, restart a service, or check out another branch. The uploader checkout is still `feature/uploader-chart-benchmark-refresh` at `ee9fcfd`. The sequence at the bottom does not start now. `production/vps-baseline` remains a later branch and was not created.
+Lane C rechecked the same clone on 2026-10-10 after the ops commit `a3aa50a` was already on origin. That lane did not commit, merge, rebase, push, fetch, delete a branch or worktree, restart a service, or check out another branch. The uploader checkout is still `feature/uploader-chart-benchmark-refresh` at `ee9fcfd`.
+
+`production/vps-baseline` now exists and is the current VPS source freeze. It includes TKP/YQ footer-fix source `be11d51a45e3ad173acf90f9941298bcbea2da2d`. Do not merge it into `main` or `live-main` yet.
 
 ## Closeout correction
 
@@ -46,7 +48,7 @@ This clone's `remote.origin.fetch` refspec tracks only `feature/ovh-tkp-tcp-agm-
 
 6. **Safest eventual consolidation order.** Leave `main` and `live-main` where they are. `production/vps-baseline` remains a later branch. Do not create it in this closeout. When it is created, in a new worktree, start from `7a935e4`, bring in `ee9fcfd` and a TCP commit that matches `C:\HC\apps\tcp`. `16c85b09` is the pushed evidence-hash hotfix and is short of the four live files. `b57fe5e` matches those four after LF normalization and does not contain `16c85b09`. Pick that up on purpose. Then copy `tkp_ts.py` and `tearsheet_paths.py` from `0a157c4`, copy repo-relative `start_agm.py` and `start_agm.cmd` from `5ca9a7c`, and combine `assets/styles.css` on purpose. Do not merge `68ef046` as a substitute tree.
 
-7. **Long-term baseline branch.** `production/vps-baseline`, created later. `origin/main` and `origin/live-main` are not that branch. The branch was not created here.
+7. **Long-term baseline branch.** `production/vps-baseline`, now created. `origin/main` and `origin/live-main` are not that branch. TKP/YQ footer fix source is `be11d51a45e3ad173acf90f9941298bcbea2da2d`.
 
 8. **Normal future development.** One reviewed production baseline, then short-lived feature branches cut from it. `production/vps-baseline` remains that later branch. The TCP overlay and the layout hotfix landed on preservation checkouts; that is the pattern this workflow replaces.
 

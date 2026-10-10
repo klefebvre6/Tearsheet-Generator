@@ -5,9 +5,14 @@ Captured: 2026-10-10
 Git checkout: `C:\HC\deployment\source\Tearsheet-Generator`
 Remote: `https://github.com/klefebvre6/Tearsheet-Generator.git`
 
-No secret values are recorded here. `C:\HC\apps` was not modified.
+## Current freeze
 
-No single branch contains every running component. `origin/main` is `f540135c070b8e2143c098327bc088085e31c94f` (merge of PR #62, 2026-07-22). `origin/live-main` is `3cfda4fdde5eaa8fae42c87b56d30d34aa717f68` (2026-07-31). Both are ancestors of the commits below. Neither contains the October VPS commits. `ops/vps-production-rebuildability-20261010` is on origin. `a3aa50a7b7abe9e827b121661d1c37441e5e80a1` is the earlier rebuild snapshot. The current tip is `68ef0465fc63b15faf4205f998921dc3970d617b`, still the uploader line plus `deployment/vps-production/`, not a union of the running trees. The future combination is in `C:\HC\deployment\GIT_CONSOLIDATION_PLAN.md`. It has not been started. `production/vps-baseline` remains a later branch and was not created.
+Primary production source branch: `production/vps-baseline`.
+This freeze includes the TKP/YQ footer fix from `be11d51a45e3ad173acf90f9941298bcbea2da2d` (`origin/fix/vps-tearsheet-footer-overlap-20261010`). AGM was audited and left unchanged. Uploader remains `ee9fcfd`. TCP executable Python and `assets/styles.css` LF-match unpushed local `b43d93ffebb3d97ff55ea61d7b3742e71968eeb1`; live `assets/nav_chart_fit.js` is newer than that commit and is copied into the baseline. Historical lineage below is preserved.
+
+No secret values are recorded here. `C:\HC\apps` was not modified by this freeze.
+
+`origin/main` is `f540135c070b8e2143c098327bc088085e31c94f`. `origin/live-main` is `3cfda4fdde5eaa8fae42c87b56d30d34aa717f68`. Neither is the current VPS baseline.
 
 Lane C rechecked this map on 2026-10-10 and did not modify `C:\HC\apps`. The afternoon closeout below is the later TCP reading. Where it conflicts with the Lane C TCP paragraphs, use the closeout.
 
@@ -39,13 +44,10 @@ Runtime config: NSSM environment for `HC-Uploader-Public`. On-disk copy: `C:\HC\
 | --- | --- |
 | Runtime | `C:\HC\apps\tcp\tcp_ts_v2.py` |
 | Service | `HC-TCP-Public` on `127.0.0.1:8302` |
-| Preserve branch | `preserve/vps-tcp-production-20261010` |
-| Preserve commit | `16c85b09cc4485c804eae69f5d5ddf89fcb3cfe0` |
-| Parent | `ee48aef6c5f83a81a96c0cc0773af69ccf991e11` |
-| Pushed | YES, `origin/preserve/vps-tcp-production-20261010` |
-| Merged | NO |
-| Feature tip | `origin/feature/tcp-benchmark-refresh-comparison-chart` is `b57fe5e4a39ccf4c972cb1d59e8d5b6dff11f353` |
-| Whole live directory matches `16c85b09` | NO |
+| Matching local commit | `b43d93ffebb3d97ff55ea61d7b3742e71968eeb1` |
+| Matching remote feature tip | `origin/feature/tcp-benchmark-refresh-comparison-chart` is `662ae032bcbcc685bc76c3ae19c636bf5f55935e` (short of `816fc75` and `b43d93f`) |
+| Preserve branch | `preserve/vps-tcp-production-20261010` at `16c85b09` |
+| Mixed tree | YES for `assets/nav_chart_fit.js` only; all other executable/UI `.py` and `assets/styles.css` LF-match `b43d93f` |
 
 `16c85b09` is a single-parent child of `ee48aef`. Subject: `Preserve deployed TCP production UI and dashboard changes`. It is the evidence-hash layout hotfix only, and it is not the later percent-axis commit `9c42e670b045465f5bf248a3292100e82342aa50`. The preserve commit changes three files and does not change `tcp_ts_v2.py`:
 
@@ -79,12 +81,11 @@ Runtime config: NSSM environment. See the config section. Live `tcp.env` has ing
 | --- | --- |
 | Runtime | `C:\HC\apps\tkp\tkp_ts.py` |
 | Service | `HC-TKP-Public` on `127.0.0.1:8301` |
-| Branch | `refactor/github-vps-deployment-structure` |
-| Commit | `0a157c49d769202c1c92590d6acc31ca512588fc` |
-| Remote | `origin/refactor/github-vps-deployment-structure` |
-| Exact match | YES |
-
-Deployed SHA-256 `86047B1AFFD7ABEB6A0342682FD3B331AE38AAB0131AEBC7139EF63B351F0589`. Git blob `f5a37fed2164912c4196847467c7de523635bed7`.
+| Footer-fix source | `be11d51a45e3ad173acf90f9941298bcbea2da2d` |
+| Title helper lineage | `0a157c49d769202c1c92590d6acc31ca512588fc` |
+| Baseline | `production/vps-baseline` contains the deployed `tkp_ts.py` after LF normalize |
+| Exact match to `be11d51` `tkp_ts.py` | NO — production keeps the nominal title helper |
+| Exact match to baseline `tkp_ts.py` | YES after CRLF/LF |
 
 Persistent data: `C:\HC\data\tkp\daily_returns_secret_state.json`
 Runtime config: NSSM environment. On-disk non-secret copy: `C:\HC\config\tkp.env`.
@@ -95,11 +96,10 @@ Runtime config: NSSM environment. On-disk non-secret copy: `C:\HC\config\tkp.env
 | --- | --- |
 | Runtime | `C:\HC\apps\yq\yq_ts.py` |
 | Service | `HC-YQ-Public` on `127.0.0.1:8303` |
-| Logic commit | `7a935e4e66bcd0983b4ccc7cb962eafeb6db59c0` |
-| Logic branch | `origin/feature/vps-yq-loopback-healthz` |
-| Path resolver commit | `0a157c49d769202c1c92590d6acc31ca512588fc` |
-| Exact production bytes preserved | NO, and they should not be committed |
-| Executable source preserved remotely | YES |
+| Footer-fix source | `be11d51a45e3ad173acf90f9941298bcbea2da2d` |
+| Logic parent | `7a935e4e66bcd0983b4ccc7cb962eafeb6db59c0` |
+| Exact production bytes preserved | NO — BOM, CRLF, CP437 mojibake on 106 lines. Do not commit those bytes. |
+| Executable source preserved remotely | YES — `yq_ts.py` at `be11d51` / baseline |
 
 Deployed `yq_ts.py` SHA-256 `1E13E9C323928C16A48E6F1ECBB91D6EF8322DEEADB127604119FE4BD22E1C94`.
 
@@ -191,4 +191,4 @@ The 12:19 automatic backup's `redacted-runtime-env.json` marks secret keys as no
 - `C:\HC\deployment\_pr65-deploy` detached at `0a157c4`
 - `C:\HC\deployment\worktrees\ops-vps-production-rebuildability-20261010` on `ops/vps-production-rebuildability-20261010` at `68ef046`
 
-`production/vps-baseline` was not created. This closeout did not merge, did not restart a service, and did not modify `C:\HC\apps`.
+`production/vps-baseline` is the current freeze branch. This freeze did not merge it elsewhere, did not restart a service, and did not modify `C:\HC\apps`.

@@ -240,14 +240,6 @@ body, #page-container {
   width: 100% !important;
   height: auto !important;
 }
-
-/* TKP public NAV chart — match tearsheet title styling (no HTML underline) */
-#NAV-graph .gtitle,
-#NAV-graph .gtitle tspan {
-  fill: var(--primary-color) !important;
-  text-decoration: none !important;
-  font-weight: 500;
-}
 #bench-overlay {
   width: 100% !important;
   height: auto !important;
@@ -534,7 +526,7 @@ body, #page-container {
 .tcp-nav-chart-section {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .tcp-nav-chart-section-inner {
@@ -575,12 +567,23 @@ body, #page-container {
 .tcp-nav-chart-plot-wrap .dash-graph,
 .tcp-nav-chart-plot-wrap .js-plotly-plot,
 .tcp-nav-chart-plot-wrap .plot-container,
-#NAV-graph {
+.tearsheet-nav-chart-plot-wrap #NAV-graph,
+.tearsheet-nav-chart-plot-wrap .dash-graph,
+.tearsheet-nav-chart-plot-wrap .js-plotly-plot,
+.tearsheet-nav-chart-plot-wrap .plot-container {
   width: 100% !important;
   height: 100% !important;
   max-width: 100% !important;
-  max-height: none !important;
+  max-height: 100% !important;
   min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.tcp-nav-chart-plot-wrap .svg-container,
+.tearsheet-nav-chart-plot-wrap .svg-container {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
 }
 
 .tcp-nav-chart-header {
@@ -641,6 +644,13 @@ body, #page-container {
   padding: 0;
   line-height: 1.2;
   cursor: pointer;
+}
+
+.tcp-nav-details,
+.tearsheet-nav-chart-notes {
+  position: relative;
+  z-index: 2;
+  background-color: #fff;
 }
 
 .tcp-nav-details {
@@ -1160,4 +1170,73 @@ body,
   .tcp-admin-modal .modal-content {
     max-height: calc(100vh - 1rem);
   }
+}
+
+/* Shared TKP/YQ NAV chart footer spacing (TCP overlap correction). */
+.tearsheet-nav-chart-section {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.tearsheet-nav-chart-plot-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: clamp(360px, 46vh, 460px);
+  min-height: 360px;
+  margin: 0 0 0.75rem;
+  overflow: hidden;
+  clear: both;
+  box-sizing: border-box;
+}
+
+.tearsheet-nav-chart-plot-wrap #NAV-graph,
+.tearsheet-nav-chart-plot-wrap .dash-graph,
+.tearsheet-nav-chart-plot-wrap .js-plotly-plot,
+.tearsheet-nav-chart-plot-wrap .plot-container {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+}
+
+.tearsheet-nav-chart-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  clear: both;
+  position: relative;
+  z-index: 1;
+}
+
+.tearsheet-nav-footnote-primary,
+.tearsheet-nav-footnote-secondary {
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tearsheet-nav-footnote-secondary {
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .tearsheet-nav-chart-plot-wrap {
+    height: clamp(320px, 58vw, 400px);
+    min-height: 320px;
+    margin-bottom: 0.65rem;
+  }
+}
+
+/* TKP public NAV chart ? match tearsheet title styling (no HTML underline) */
+#NAV-graph .gtitle,
+#NAV-graph .gtitle tspan {
+  fill: var(--primary-color) !important;
+  text-decoration: none !important;
+  font-weight: 500;
 }
