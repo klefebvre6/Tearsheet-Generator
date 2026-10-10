@@ -304,8 +304,8 @@ def recompute_tcp_daily_metrics(
 NAV_CHART_TITLE = "<u>Non-Compounded NAV Since Inception</u>"
 NAV_CHART_UIREVISION = "tcp-nav-chart-v1"
 NAV_PCT_AXIS_TITLE = "Return since inception (%)"
-NAV_CHART_MARGIN_DEFAULT = {"l": 48, "r": 12, "t": 56, "b": 52}
-NAV_CHART_MARGIN_WITH_PCT_AXIS = {"l": 48, "r": 72, "t": 56, "b": 52}
+NAV_CHART_MARGIN_DEFAULT = {"l": 48, "r": 12, "t": 56, "b": 64}
+NAV_CHART_MARGIN_WITH_PCT_AXIS = {"l": 48, "r": 72, "t": 56, "b": 64}
 BTC_LINE_COLOR = "#F7931A"
 ETH_LINE_COLOR = "#627EEA"
 TCP_TRACE_NAME = "TCP"

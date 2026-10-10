@@ -523,11 +523,37 @@ body, #page-container {
   color: #664d03;
 }
 
-.tcp-nav-chart-container {
-  width: 95%;
+.tcp-nav-chart-section {
+  width: 100%;
   max-width: 100%;
-  margin: 0 auto var(--spacing-unit);
+  overflow-x: hidden;
+}
+
+.tcp-nav-chart-section-inner {
+  width: min(100%, 56rem);
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 clamp(0.35rem, 2vw, 0.75rem);
+  box-sizing: border-box;
+}
+
+.tcp-nav-chart-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
   page-break-inside: avoid;
+}
+
+.tcp-nav-chart-plot-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: clamp(360px, 46vh, 460px);
+  min-height: 360px;
+  margin: 0 0 0.75rem;
+  overflow: hidden;
+  clear: both;
+  box-sizing: border-box;
 }
 
 .chart-container {
@@ -537,11 +563,16 @@ body, #page-container {
   page-break-inside: avoid;
 }
 
-#nav-preview-graph,
+.tcp-nav-chart-plot-wrap #nav-preview-graph,
+.tcp-nav-chart-plot-wrap .dash-graph,
+.tcp-nav-chart-plot-wrap .js-plotly-plot,
+.tcp-nav-chart-plot-wrap .plot-container,
 #NAV-graph {
   width: 100% !important;
-  height: auto !important;
-  min-height: 320px;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
 }
 
 .tcp-nav-chart-header {
@@ -550,9 +581,9 @@ body, #page-container {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.35rem 0.75rem;
-  width: 95%;
+  width: 100%;
   max-width: 100%;
-  margin: 0 auto 0.35rem;
+  margin: 0 0 0.5rem;
 }
 
 .tcp-nav-overlay-controls {
@@ -572,6 +603,50 @@ body, #page-container {
   display: inline-flex;
   align-items: center;
   margin: 0;
+}
+
+.tcp-nav-overlay-check-label,
+.tcp-nav-overlay-input {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  cursor: pointer;
+}
+
+.tcp-nav-overlay-checklist .form-check {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 0;
+  padding-left: 0;
+  min-height: 2.75rem;
+}
+
+.tcp-nav-overlay-checklist .form-check-input {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.tcp-nav-chart-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  clear: both;
+  position: relative;
+  z-index: 1;
+}
+
+.tcp-overlay-note,
+.tcp-nav-footnote-primary,
+.tcp-nav-footnote-secondary {
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tcp-nav-footnote-secondary {
+  margin-bottom: 2rem;
 }
 
 .tcp-nav-overlay-btc-label {
@@ -601,26 +676,26 @@ body, #page-container {
 }
 
 .tcp-overlay-attribution-row {
-  width: 95%;
+  width: 100%;
   max-width: 100%;
-  margin: 0.35rem auto 0.25rem;
+  margin: 0;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .tcp-overlay-attribution-text {
   display: inline;
 }
 
-@media (min-width: 769px) {
+@media (min-width: 900px) {
   .tcp-overlay-attribution-row {
-    white-space: nowrap;
-    overflow-x: auto;
+    white-space: normal;
   }
 }
 
 .tcp-overlay-stale-row {
-  width: 95%;
-  margin: 0 auto 0.25rem;
+  width: 100%;
+  margin: 0;
 }
 
 @media (min-width: 1024px) and (max-width: 1439px) {
@@ -911,18 +986,18 @@ body,
     margin-right: 0;
   }
 
-  #nav-preview-graph,
-  #NAV-graph {
-    min-height: 260px;
-    max-height: 360px;
-  }
-
-  .tcp-nav-chart-container {
-    width: 100%;
-    max-width: 100%;
+  .tcp-nav-chart-plot-wrap {
+    height: clamp(320px, 58vw, 400px);
+    min-height: 320px;
+    margin-bottom: 0.65rem;
   }
 
   .tcp-nav-chart-header {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .tcp-nav-overlay-controls {
     width: 100%;
     justify-content: flex-start;
   }
