@@ -605,24 +605,34 @@ body, #page-container {
   margin: 0;
 }
 
-.tcp-nav-overlay-check-label,
-.tcp-nav-overlay-input {
-  min-height: 2.75rem;
-  min-width: 2.75rem;
-  cursor: pointer;
-}
-
 .tcp-nav-overlay-checklist .form-check {
   display: inline-flex;
   align-items: center;
-  margin-bottom: 0;
-  padding-left: 0;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.55rem 0.4rem;
   min-height: 2.75rem;
+  cursor: pointer;
 }
 
-.tcp-nav-overlay-checklist .form-check-input {
-  margin-top: 0;
-  flex-shrink: 0;
+.tcp-nav-overlay-checklist .form-check-input,
+.tcp-nav-overlay-input {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  min-height: 17px;
+  max-width: 17px;
+  max-height: 17px;
+  margin: 0;
+  flex: 0 0 17px;
+  cursor: pointer;
+}
+
+.tcp-nav-overlay-check-label {
+  margin: 0;
+  padding: 0;
+  line-height: 1.2;
+  cursor: pointer;
 }
 
 .tcp-nav-details {
