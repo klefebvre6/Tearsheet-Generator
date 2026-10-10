@@ -28,10 +28,15 @@ from tcp_comparison import (
 )
 from tcp_dashboard import (
     NAV_CHART_TITLE,
+    NAV_PCT_AXIS_TITLE,
     build_tcp_nav_chart_figure,
     build_tcp_nav_figure,
     canonical_nav_records_from_ledger,
+    dollar_range_to_pct_range,
+    dollar_value_to_pct_return,
+    nav_pct_axis_baseline,
     patch_nav_chart_overlay_visibility,
+    patch_nav_chart_pct_axis,
     propagate_tcp_dashboard,
 )
 from tcp_nav_overlays import build_nav_overlay_bundle
@@ -96,6 +101,51 @@ def test_tcp_nav_chart_preserves_raw_nav_values():
     assert legacy.data[0].y[0] == pytest.approx(50013.472)
 
 
+def test_pct_axis_baseline_alignment_examples():
+    baseline = nav_pct_axis_baseline()
+    assert baseline == pytest.approx(OVERLAY_BASELINE)
+    assert dollar_value_to_pct_return(40_000.0, baseline) == pytest.approx(-20.0)
+    assert dollar_value_to_pct_return(50_000.0, baseline) == pytest.approx(0.0)
+    assert dollar_value_to_pct_return(60_000.0, baseline) == pytest.approx(20.0)
+    assert dollar_value_to_pct_return(75_000.0, baseline) == pytest.approx(50.0)
+
+
+def test_pct_axis_range_tracks_dollar_range():
+    dollar_range = [40_000.0, 75_000.0]
+    assert dollar_range_to_pct_range(dollar_range) == pytest.approx([-20.0, 50.0])
+
+
+def test_pct_axis_hidden_by_default():
+    records = [{"Date": "2026-01-20", "NAV": 50000.0}, {"Date": "2026-01-21", "NAV": 51000.0}]
+    bundle = build_nav_overlay_bundle(records, None, None)
+    fig = build_tcp_nav_chart_figure(bundle)
+    assert fig.layout.yaxis.title.text == "Value ($)"
+    yaxis2 = fig.layout.yaxis2
+    assert yaxis2 is None or yaxis2.visible is False
+
+
+def test_pct_axis_visible_when_enabled():
+    records = [{"Date": "2026-01-20", "NAV": 50000.0}, {"Date": "2026-01-21", "NAV": 51000.0}]
+    bundle = build_nav_overlay_bundle(records, None, None)
+    fig = build_tcp_nav_chart_figure(bundle, show_pct_axis=True)
+    assert fig.layout.yaxis2.visible is True
+    assert NAV_PCT_AXIS_TITLE in (fig.layout.yaxis2.title.text or "")
+    assert fig.layout.yaxis2.range == pytest.approx(
+        dollar_range_to_pct_range(fig.layout.yaxis.range),
+        rel=1e-6,
+    )
+
+
+def test_pct_axis_toggle_does_not_change_tcp_trace_values():
+    records = [{"Date": "2026-01-20", "NAV": 50013.472}, {"Date": "2026-01-21", "NAV": 50031.504}]
+    bundle = build_nav_overlay_bundle(records, None, None)
+    fig = build_tcp_nav_chart_figure(bundle)
+    before_y = list(fig.data[0].y)
+    patch_nav_chart_pct_axis(fig, show_pct_axis=True, show_btc=False, show_eth=False)
+    assert list(fig.data[0].y) == before_y
+    assert fig.data[0].y[0] == pytest.approx(50013.472)
+
+
 def test_overlay_visibility_flags_on_rebuild():
     records = [{"Date": "2026-01-20", "NAV": 50000.0}, {"Date": "2026-01-21", "NAV": 51000.0}]
     bundle = build_nav_overlay_bundle(
@@ -134,6 +184,7 @@ def test_single_nav_chart_layout_markers(layout_text):
     assert "Growth of $50,000 Since Inception" not in layout_text
     assert "tcp-overlay-btc" in layout_text
     assert "tcp-overlay-eth" in layout_text
+    assert "tcp-overlay-pct-axis" in layout_text
     assert "tcp-overlay-attribution" in layout_text
 
 

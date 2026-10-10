@@ -94,6 +94,8 @@ from tcp_dashboard import (
     build_tcp_nav_chart_figure,
     build_tcp_current_data_labels,
     patch_nav_chart_overlay_visibility,
+    patch_nav_chart_pct_axis,
+    patch_nav_chart_pct_axis_from_relayout,
     propagate_tcp_dashboard,
 )
 from tcp_ledger import TCPLedgerError
@@ -127,6 +129,7 @@ from tcp_public_sections import (
     build_nav_chart_section,
     TCP_OVERLAY_BTC_ID,
     TCP_OVERLAY_ETH_ID,
+    TCP_NAV_PCT_AXIS_ID,
     TCP_OVERLAY_ATTRIBUTION_ID,
     TCP_OVERLAY_STALE_ID,
     build_public_disclosure_panel,
@@ -1047,6 +1050,42 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
             show_btc=show_btc,
             show_eth=show_eth,
         )
+
+    @app.callback(
+        Output("nav-preview-graph", "figure", allow_duplicate=True),
+        Input(TCP_NAV_PCT_AXIS_ID, "value"),
+        State("nav-preview-graph", "figure"),
+        State(TCP_OVERLAY_BTC_ID, "value"),
+        State(TCP_OVERLAY_ETH_ID, "value"),
+        prevent_initial_call=True,
+    )
+    def _toggle_nav_pct_axis(pct_axis, figure, btc_overlay, eth_overlay):
+        if not figure:
+            raise PreventUpdate
+        show_pct = _overlay_checklist_enabled(pct_axis, "pct")
+        show_btc = _overlay_checklist_enabled(btc_overlay, "btc")
+        show_eth = _overlay_checklist_enabled(eth_overlay, "eth")
+        return patch_nav_chart_pct_axis(
+            figure,
+            show_pct_axis=show_pct,
+            show_btc=show_btc,
+            show_eth=show_eth,
+        )
+
+    @app.callback(
+        Output("nav-preview-graph", "figure", allow_duplicate=True),
+        Input("nav-preview-graph", "relayoutData"),
+        State("nav-preview-graph", "figure"),
+        State(TCP_NAV_PCT_AXIS_ID, "value"),
+        prevent_initial_call=True,
+    )
+    def _sync_nav_pct_axis_on_relayout(relayout_data, figure, pct_axis):
+        if not _overlay_checklist_enabled(pct_axis, "pct"):
+            raise PreventUpdate
+        patched = patch_nav_chart_pct_axis_from_relayout(figure, relayout_data or {})
+        if patched is None:
+            raise PreventUpdate
+        return patched
 
 
 def _register_admin_callbacks(

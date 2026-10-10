@@ -54,6 +54,7 @@ MONTHLY_PERFORMANCE_CLASS = "table-responsive tcp-monthly-performance"
 NAV_CHART_CONTAINER_CLASS = "tcp-nav-chart-container"
 TCP_OVERLAY_BTC_ID = "tcp-overlay-btc"
 TCP_OVERLAY_ETH_ID = "tcp-overlay-eth"
+TCP_NAV_PCT_AXIS_ID = "tcp-overlay-pct-axis"
 TCP_NAV_OVERLAY_CONTROLS_CLASS = "tcp-nav-overlay-controls"
 TCP_NAV_CHART_HEADER_CLASS = "tcp-nav-chart-header"
 TCP_OVERLAY_ATTRIBUTION_ID = "tcp-overlay-attribution"
@@ -816,6 +817,15 @@ def build_nav_overlay_controls() -> html.Div:
                 className="tcp-nav-overlay-checklist tcp-nav-overlay-eth",
                 inputClassName="tcp-nav-overlay-input",
                 labelClassName="tcp-nav-overlay-check-label tcp-nav-overlay-eth-label",
+            ),
+            dbc.Checklist(
+                options=[{"label": " % axis", "value": "pct"}],
+                value=[],
+                id=TCP_NAV_PCT_AXIS_ID,
+                inline=True,
+                className="tcp-nav-overlay-checklist tcp-nav-overlay-pct",
+                inputClassName="tcp-nav-overlay-input",
+                labelClassName="tcp-nav-overlay-check-label tcp-nav-overlay-pct-label",
             ),
         ],
         className=TCP_NAV_OVERLAY_CONTROLS_CLASS,

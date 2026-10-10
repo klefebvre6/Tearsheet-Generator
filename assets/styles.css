@@ -582,6 +582,24 @@ body, #page-container {
   color: #627EEA;
 }
 
+.tcp-nav-overlay-pct-label {
+  color: var(--primary-color);
+}
+
+.tcp-nav-overlay-pct {
+  margin-left: 0.15rem;
+}
+
+@media (max-width: 480px) {
+  .tcp-nav-overlay-controls {
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+  .tcp-nav-overlay-pct {
+    margin-left: 0;
+  }
+}
+
 .tcp-overlay-attribution-row {
   width: 95%;
   max-width: 100%;

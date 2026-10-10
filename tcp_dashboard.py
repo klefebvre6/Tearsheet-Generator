@@ -303,9 +303,69 @@ def recompute_tcp_daily_metrics(
 
 NAV_CHART_TITLE = "<u>Non-Compounded NAV Since Inception</u>"
 NAV_CHART_UIREVISION = "tcp-nav-chart-v1"
+NAV_PCT_AXIS_TITLE = "Return since inception (%)"
+NAV_CHART_MARGIN_DEFAULT = {"l": 48, "r": 12, "t": 56, "b": 52}
+NAV_CHART_MARGIN_WITH_PCT_AXIS = {"l": 48, "r": 72, "t": 56, "b": 52}
 BTC_LINE_COLOR = "#F7931A"
 ETH_LINE_COLOR = "#627EEA"
 TCP_TRACE_NAME = "TCP"
+
+
+def nav_pct_axis_baseline() -> float:
+    from tcp_comparison import OVERLAY_BASELINE
+
+    return float(OVERLAY_BASELINE)
+
+
+def dollar_value_to_pct_return(dollar_value: float, baseline: Optional[float] = None) -> float:
+    base = float(baseline if baseline is not None else nav_pct_axis_baseline())
+    if not base:
+        return 0.0
+    return (float(dollar_value) / base - 1.0) * 100.0
+
+
+def dollar_range_to_pct_range(
+    dollar_range: Sequence[float],
+    baseline: Optional[float] = None,
+) -> List[float]:
+    return [
+        dollar_value_to_pct_return(dollar_range[0], baseline),
+        dollar_value_to_pct_return(dollar_range[1], baseline),
+    ]
+
+
+def build_nav_pct_yaxis2(
+    dollar_range: Optional[Sequence[float]],
+    *,
+    visible: bool,
+) -> Dict[str, Any]:
+    if not visible:
+        return {"overlaying": "y", "side": "right", "visible": False}
+    layout: Dict[str, Any] = {
+        "title": {"text": NAV_PCT_AXIS_TITLE},
+        "overlaying": "y",
+        "side": "right",
+        "showgrid": False,
+        "zeroline": False,
+        "visible": True,
+        "ticksuffix": "%",
+        "automargin": True,
+        "fixedrange": True,
+    }
+    if dollar_range is not None and len(dollar_range) == 2:
+        layout["range"] = dollar_range_to_pct_range(dollar_range)
+    return layout
+
+
+def _figure_as_dict(figure: Any) -> Mapping[str, Any]:
+    if hasattr(figure, "to_plotly_json"):
+        return figure.to_plotly_json()
+    return figure
+
+
+def _figure_shows_pct_axis(figure: Mapping[str, Any]) -> bool:
+    yaxis2 = figure.get("layout", {}).get("yaxis2") or {}
+    return bool(yaxis2.get("visible"))
 
 
 def _return_since_baseline(values: Sequence[float], baseline: float) -> List[float]:
@@ -340,6 +400,7 @@ def build_tcp_nav_chart_figure(
     *,
     show_btc: bool = False,
     show_eth: bool = False,
+    show_pct_axis: bool = False,
 ) -> go.Figure:
     """Single NAV chart with optional BTC/ETH overlays. TCP accounting is unchanged."""
     fig = go.Figure()
@@ -420,6 +481,11 @@ def build_tcp_nav_chart_figure(
             show_btc=show_btc,
             show_eth=show_eth,
         )
+    margin = (
+        dict(NAV_CHART_MARGIN_WITH_PCT_AXIS)
+        if show_pct_axis
+        else dict(NAV_CHART_MARGIN_DEFAULT)
+    )
     fig.update_layout(
         title={"text": NAV_CHART_TITLE, "x": 0.5, "xanchor": "center"},
         template="ggplot2",
@@ -431,13 +497,19 @@ def build_tcp_nav_chart_figure(
         showlegend=False,
         hovermode="x unified",
         uirevision=NAV_CHART_UIREVISION,
-        margin={"l": 48, "r": 12, "t": 56, "b": 36},
+        margin=margin,
+        yaxis2=build_nav_pct_yaxis2(y_range, visible=show_pct_axis),
     )
     fig.update_xaxes(showgrid=True, automargin=True, tickangle=-25)
-    yaxis_kwargs: Dict[str, Any] = {"showgrid": True, "automargin": True, "tickprefix": "$", "tickformat": ",.0f"}
+    yaxis_layout: Dict[str, Any] = {
+        "showgrid": True,
+        "automargin": True,
+        "tickprefix": "$",
+        "tickformat": ",.0f",
+    }
     if y_range is not None:
-        yaxis_kwargs["range"] = y_range
-    fig.update_yaxes(**yaxis_kwargs)
+        yaxis_layout["range"] = y_range
+    fig.update_layout(yaxis=yaxis_layout)
     return fig
 
 
@@ -447,16 +519,55 @@ def build_tcp_nav_figure(
     show_percentage_axis: bool = False,
 ) -> go.Figure:
     """Backward-compatible TCP-only figure (tests and legacy callers)."""
-    if show_percentage_axis:
-        raise ValueError("TCP percentage NAV axis is out of scope for Step 7")
     from tcp_nav_overlays import build_nav_overlay_bundle
 
     bundle = build_nav_overlay_bundle(canonical_records, None, None)
-    return build_tcp_nav_chart_figure(bundle, show_btc=False, show_eth=False)
+    return build_tcp_nav_chart_figure(
+        bundle,
+        show_btc=False,
+        show_eth=False,
+        show_pct_axis=show_percentage_axis,
+    )
+
+
+def _resolve_nav_chart_dollar_y_range(
+    figure: Any,
+    *,
+    show_btc: bool,
+    show_eth: bool,
+    explicit_range: Optional[Sequence[float]] = None,
+) -> Optional[List[float]]:
+    figure = _figure_as_dict(figure)
+    if explicit_range is not None and len(explicit_range) == 2:
+        return [float(explicit_range[0]), float(explicit_range[1])]
+    layout_range = figure.get("layout", {}).get("yaxis", {}).get("range")
+    if layout_range and len(layout_range) == 2:
+        return [float(layout_range[0]), float(layout_range[1])]
+    if not figure.get("data") or len(figure["data"]) < 3:
+        return None
+    return _visible_y_range(
+        figure["data"][0].get("y", []),
+        figure["data"][1].get("y", []),
+        figure["data"][2].get("y", []),
+        show_btc=show_btc,
+        show_eth=show_eth,
+    )
+
+
+def _patch_nav_chart_yaxis2_range(
+    patched: Any,
+    figure: Mapping[str, Any],
+    dollar_range: Optional[Sequence[float]],
+) -> None:
+    if not _figure_shows_pct_axis(figure):
+        return
+    if dollar_range is None or len(dollar_range) != 2:
+        return
+    patched["layout"]["yaxis2"]["range"] = dollar_range_to_pct_range(dollar_range)
 
 
 def patch_nav_chart_overlay_visibility(
-    figure: Mapping[str, Any],
+    figure: Any,
     *,
     show_btc: bool,
     show_eth: bool,
@@ -464,6 +575,7 @@ def patch_nav_chart_overlay_visibility(
     """Toggle overlay traces without rebuilding the figure (preserves zoom)."""
     from dash import Patch
 
+    figure = _figure_as_dict(figure)
     patched = Patch()
     if not figure or not figure.get("data"):
         return patched
@@ -477,6 +589,71 @@ def patch_nav_chart_overlay_visibility(
     y_range = _visible_y_range(tcp_y, btc_y, eth_y, show_btc=show_btc, show_eth=show_eth)
     if y_range is not None:
         patched["layout"]["yaxis"]["range"] = y_range
+        _patch_nav_chart_yaxis2_range(patched, figure, y_range)
+    patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
+    return patched
+
+
+def patch_nav_chart_pct_axis(
+    figure: Any,
+    *,
+    show_pct_axis: bool,
+    show_btc: bool,
+    show_eth: bool,
+) -> Dict[str, Any]:
+    """Show or hide the synchronized return (%) axis without rebuilding traces."""
+    from dash import Patch
+
+    figure = _figure_as_dict(figure)
+    patched = Patch()
+    if not figure:
+        return patched
+    margin = NAV_CHART_MARGIN_WITH_PCT_AXIS if show_pct_axis else NAV_CHART_MARGIN_DEFAULT
+    patched["layout"]["margin"] = dict(margin)
+    dollar_range = _resolve_nav_chart_dollar_y_range(
+        figure,
+        show_btc=show_btc,
+        show_eth=show_eth,
+    )
+    patched["layout"]["yaxis2"] = build_nav_pct_yaxis2(dollar_range, visible=show_pct_axis)
+    patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
+    return patched
+
+
+def patch_nav_chart_pct_axis_from_relayout(
+    figure: Any,
+    relayout_data: Mapping[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Keep the right-hand % axis aligned with the primary dollar axis after zoom/pan."""
+    from dash import Patch
+
+    figure = _figure_as_dict(figure)
+    if not figure or not _figure_shows_pct_axis(figure):
+        return None
+    if not relayout_data:
+        return None
+    dollar_range: Optional[List[float]] = None
+    if "yaxis.range" in relayout_data:
+        raw = relayout_data["yaxis.range"]
+        if raw and len(raw) == 2:
+            dollar_range = [float(raw[0]), float(raw[1])]
+    elif "yaxis.range[0]" in relayout_data and "yaxis.range[1]" in relayout_data:
+        dollar_range = [
+            float(relayout_data["yaxis.range[0]"]),
+            float(relayout_data["yaxis.range[1]"]),
+        ]
+    elif relayout_data.get("yaxis.autorange"):
+        show_btc = len(figure.get("data", ())) > 1 and figure["data"][1].get("visible") in (True, "true")
+        show_eth = len(figure.get("data", ())) > 2 and figure["data"][2].get("visible") in (True, "true")
+        dollar_range = _resolve_nav_chart_dollar_y_range(
+            figure,
+            show_btc=show_btc,
+            show_eth=show_eth,
+        )
+    if dollar_range is None:
+        return None
+    patched = Patch()
+    patched["layout"]["yaxis2"]["range"] = dollar_range_to_pct_range(dollar_range)
     patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
     return patched
 
