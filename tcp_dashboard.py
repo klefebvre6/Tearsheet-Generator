@@ -301,18 +301,144 @@ def recompute_tcp_daily_metrics(
     )
 
 
-def build_tcp_nav_figure(
-    canonical_records: Sequence[Mapping[str, Any]],
-    *,
-    show_percentage_axis: bool = False,
-) -> go.Figure:
-    """Build TCP NAV chart from canonical records (no benchmark trace, no % axis by default)."""
-    if show_percentage_axis:
-        raise ValueError("TCP percentage NAV axis is out of scope for Step 7")
+NAV_CHART_TITLE = "<u>Non-Compounded NAV Since Inception</u>"
+NAV_CHART_UIREVISION = "tcp-nav-chart-v1"
+NAV_PCT_AXIS_TITLE = "Return since inception (%)"
+NAV_CHART_MARGIN_DEFAULT = {"l": 48, "r": 12, "t": 56, "b": 64}
+NAV_CHART_MARGIN_WITH_PCT_AXIS = {"l": 48, "r": 72, "t": 56, "b": 64}
+BTC_LINE_COLOR = "#F7931A"
+ETH_LINE_COLOR = "#627EEA"
+TCP_TRACE_NAME = "TCP"
 
-    nav_series = canonical_records_to_series(canonical_records)
-    if nav_series.empty:
-        fig = go.Figure()
+
+def nav_pct_axis_baseline() -> float:
+    from tcp_comparison import OVERLAY_BASELINE
+
+    return float(OVERLAY_BASELINE)
+
+
+def dollar_value_to_pct_return(dollar_value: float, baseline: Optional[float] = None) -> float:
+    base = float(baseline if baseline is not None else nav_pct_axis_baseline())
+    if not base:
+        return 0.0
+    return (float(dollar_value) / base - 1.0) * 100.0
+
+
+def dollar_range_to_pct_range(
+    dollar_range: Sequence[float],
+    baseline: Optional[float] = None,
+) -> List[float]:
+    return [
+        dollar_value_to_pct_return(dollar_range[0], baseline),
+        dollar_value_to_pct_return(dollar_range[1], baseline),
+    ]
+
+
+def nav_pct_axis_ticks(
+    dollar_range: Sequence[float],
+    baseline: Optional[float] = None,
+) -> tuple[List[float], List[str]]:
+    """Dollar tick positions with percent labels (shared y scale)."""
+    base = float(baseline if baseline is not None else nav_pct_axis_baseline())
+    pct_min = dollar_value_to_pct_return(dollar_range[0], base)
+    pct_max = dollar_value_to_pct_return(dollar_range[1], base)
+    span = abs(pct_max - pct_min)
+    if span > 50:
+        step = 10
+    elif span > 20:
+        step = 5
+    elif span > 10:
+        step = 2
+    else:
+        step = 1
+    tick_start = int(pct_min / step - 1) * step
+    tick_end = int(pct_max / step + 2) * step
+    pct_ticks = list(range(tick_start, tick_end + step, step))
+    tickvals = [base * (1.0 + pct / 100.0) for pct in pct_ticks]
+    ticktext = [f"{pct:.0f}%" for pct in pct_ticks]
+    return tickvals, ticktext
+
+
+def build_nav_pct_yaxis2(
+    dollar_range: Optional[Sequence[float]],
+    *,
+    visible: bool,
+) -> Dict[str, Any]:
+    """Secondary axis shares the dollar scale; tick text shows return since inception."""
+    layout: Dict[str, Any] = {
+        "overlaying": "y",
+        "side": "right",
+        "showgrid": False,
+        "zeroline": False,
+        "visible": True,
+        "automargin": True,
+        "fixedrange": True,
+        "showticklabels": visible,
+        "showline": visible,
+        "ticklen": 0 if not visible else 4,
+        "title": {"text": NAV_PCT_AXIS_TITLE if visible else ""},
+    }
+    if dollar_range is not None and len(dollar_range) == 2:
+        tickvals, ticktext = nav_pct_axis_ticks(dollar_range)
+        layout["tickmode"] = "array"
+        layout["tickvals"] = tickvals
+        layout["ticktext"] = ticktext
+        layout["range"] = [float(dollar_range[0]), float(dollar_range[1])]
+    return layout
+
+
+def _figure_as_dict(figure: Any) -> Mapping[str, Any]:
+    if hasattr(figure, "to_plotly_json"):
+        return figure.to_plotly_json()
+    return figure
+
+
+def _figure_shows_pct_axis(figure: Mapping[str, Any]) -> bool:
+    yaxis2 = figure.get("layout", {}).get("yaxis2") or {}
+    if not yaxis2:
+        return False
+    title = yaxis2.get("title") or {}
+    title_text = title.get("text") if isinstance(title, dict) else title
+    return bool(yaxis2.get("showticklabels")) or title_text == NAV_PCT_AXIS_TITLE
+
+
+def _return_since_baseline(values: Sequence[float], baseline: float) -> List[float]:
+    if not baseline:
+        return [0.0 for _ in values]
+    return [float(value) / float(baseline) - 1.0 for value in values]
+
+
+def _visible_y_range(
+    tcp_values: Sequence[float],
+    btc_values: Sequence[float],
+    eth_values: Sequence[float],
+    *,
+    show_btc: bool,
+    show_eth: bool,
+) -> Optional[List[float]]:
+    values: List[float] = [float(v) for v in tcp_values if v is not None and math.isfinite(float(v))]
+    if show_btc:
+        values.extend(float(v) for v in btc_values if v is not None and math.isfinite(float(v)))
+    if show_eth:
+        values.extend(float(v) for v in eth_values if v is not None and math.isfinite(float(v)))
+    if not values:
+        return None
+    low = min(values)
+    high = max(values)
+    pad = max((high - low) * 0.05, 250.0)
+    return [low - pad, high + pad]
+
+
+def build_tcp_nav_chart_figure(
+    overlay_bundle: Any,
+    *,
+    show_btc: bool = False,
+    show_eth: bool = False,
+    show_pct_axis: bool = False,
+) -> go.Figure:
+    """Single NAV chart with optional BTC/ETH overlays. TCP accounting is unchanged."""
+    fig = go.Figure()
+    if overlay_bundle is None or overlay_bundle.tcp_nav.empty:
         fig.add_annotation(
             text="No NAV data available",
             xref="paper",
@@ -321,47 +447,260 @@ def build_tcp_nav_figure(
             y=0.5,
             showarrow=False,
         )
-        fig.update_layout(
-            title={
-                "text": "<u>Non-Compounded NAV Since Inception</u>",
-                "x": 0.5,
-                "xanchor": "center",
-            },
-            template="ggplot2",
-            plot_bgcolor=GREY_BG,
-            paper_bgcolor=WHITE_BG,
-            xaxis_title="Date",
-            yaxis_title="NAV",
-        )
-        return fig
+    else:
+        dates = overlay_bundle.tcp_dates
+        tcp_values = overlay_bundle.tcp_nav.astype(float).tolist()
+        btc_values = overlay_bundle.btc_overlay.astype(float).tolist()
+        eth_values = overlay_bundle.eth_overlay.astype(float).tolist()
+        tcp_base = float(overlay_bundle.baseline_nav or tcp_values[0])
+        from tcp_comparison import OVERLAY_BASELINE
 
-    fig = go.Figure(
-        go.Scatter(
-            x=nav_series.index,
-            y=nav_series.values,
-            mode="lines",
-            line={"color": PRIMARY_COLOR},
-            name="NAV",
-            hovertemplate="Date=%{x|%Y-%m-%d}<br>NAV=%{y:.3f}<extra></extra>",
+        overlay_base = float(OVERLAY_BASELINE)
+        tcp_returns = _return_since_baseline(tcp_values, tcp_base)
+        btc_returns = _return_since_baseline(btc_values, overlay_base)
+        eth_returns = _return_since_baseline(eth_values, overlay_base)
+        fig.add_trace(
+            go.Scatter(
+                x=dates,
+                y=tcp_values,
+                mode="lines",
+                name=TCP_TRACE_NAME,
+                line={"color": PRIMARY_COLOR, "width": 2.4},
+                customdata=tcp_returns,
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    f"{TCP_TRACE_NAME}=$%{{y:,.2f}}<br>"
+                    "Return since inception=%{customdata:.2%}<extra></extra>"
+                ),
+            )
         )
+        fig.add_trace(
+            go.Scatter(
+                x=dates,
+                y=btc_values,
+                mode="lines",
+                name="BTC",
+                visible=show_btc,
+                line={"color": BTC_LINE_COLOR, "width": 2.0},
+                customdata=btc_returns,
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    "BTC=$%{y:,.2f}<br>"
+                    "Return since inception=%{customdata:.2%}<extra></extra>"
+                ),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=dates,
+                y=eth_values,
+                mode="lines",
+                name="ETH",
+                visible=show_eth,
+                line={"color": ETH_LINE_COLOR, "width": 2.0},
+                customdata=eth_returns,
+                hovertemplate=(
+                    "%{x|%Y-%m-%d}<br>"
+                    "ETH=$%{y:,.2f}<br>"
+                    "Return since inception=%{customdata:.2%}<extra></extra>"
+                ),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[dates[-1]],
+                y=[tcp_values[-1]],
+                mode="markers",
+                name="TCP % axis anchor",
+                yaxis="y2",
+                marker={"opacity": 0, "size": 1},
+                showlegend=False,
+                hoverinfo="skip",
+            )
+        )
+    y_range = None
+    if overlay_bundle is not None and not overlay_bundle.tcp_nav.empty:
+        y_range = _visible_y_range(
+            overlay_bundle.tcp_nav.astype(float).tolist(),
+            overlay_bundle.btc_overlay.astype(float).tolist(),
+            overlay_bundle.eth_overlay.astype(float).tolist(),
+            show_btc=show_btc,
+            show_eth=show_eth,
+        )
+    margin = (
+        dict(NAV_CHART_MARGIN_WITH_PCT_AXIS)
+        if show_pct_axis
+        else dict(NAV_CHART_MARGIN_DEFAULT)
     )
     fig.update_layout(
-        title={
-            "text": "<u>Non-Compounded NAV Since Inception</u>",
-            "x": 0.5,
-            "xanchor": "center",
-        },
+        title={"text": NAV_CHART_TITLE, "x": 0.5, "xanchor": "center"},
         template="ggplot2",
         plot_bgcolor=GREY_BG,
         paper_bgcolor=WHITE_BG,
         xaxis_title="Date",
-        yaxis_title="NAV",
+        yaxis_title="Value ($)",
         autosize=True,
-        margin={"l": 36, "r": 12, "t": 44, "b": 36},
+        showlegend=False,
+        hovermode="x unified",
+        uirevision=NAV_CHART_UIREVISION,
+        margin=margin,
+        yaxis2=build_nav_pct_yaxis2(y_range, visible=show_pct_axis),
     )
     fig.update_xaxes(showgrid=True, automargin=True, tickangle=-25)
-    fig.update_yaxes(showgrid=True, automargin=True)
+    yaxis_layout: Dict[str, Any] = {
+        "showgrid": True,
+        "automargin": True,
+        "tickprefix": "$",
+        "tickformat": ",.0f",
+    }
+    if y_range is not None:
+        yaxis_layout["range"] = y_range
+    fig.update_layout(yaxis=yaxis_layout)
     return fig
+
+
+def build_tcp_nav_figure(
+    canonical_records: Sequence[Mapping[str, Any]],
+    *,
+    show_percentage_axis: bool = False,
+) -> go.Figure:
+    """Backward-compatible TCP-only figure (tests and legacy callers)."""
+    from tcp_nav_overlays import build_nav_overlay_bundle
+
+    bundle = build_nav_overlay_bundle(canonical_records, None, None)
+    return build_tcp_nav_chart_figure(
+        bundle,
+        show_btc=False,
+        show_eth=False,
+        show_pct_axis=show_percentage_axis,
+    )
+
+
+def _resolve_nav_chart_dollar_y_range(
+    figure: Any,
+    *,
+    show_btc: bool,
+    show_eth: bool,
+    explicit_range: Optional[Sequence[float]] = None,
+) -> Optional[List[float]]:
+    figure = _figure_as_dict(figure)
+    if explicit_range is not None and len(explicit_range) == 2:
+        return [float(explicit_range[0]), float(explicit_range[1])]
+    layout_range = figure.get("layout", {}).get("yaxis", {}).get("range")
+    if layout_range and len(layout_range) == 2:
+        return [float(layout_range[0]), float(layout_range[1])]
+    if not figure.get("data") or len(figure["data"]) < 4:
+        return None
+    return _visible_y_range(
+        figure["data"][0].get("y", []),
+        figure["data"][1].get("y", []),
+        figure["data"][2].get("y", []),
+        show_btc=show_btc,
+        show_eth=show_eth,
+    )
+
+
+def _patch_nav_chart_yaxis2_range(
+    patched: Any,
+    figure: Mapping[str, Any],
+    dollar_range: Optional[Sequence[float]],
+) -> None:
+    if not _figure_shows_pct_axis(figure):
+        return
+    if dollar_range is None or len(dollar_range) != 2:
+        return
+    patched["layout"]["yaxis2"]["range"] = dollar_range_to_pct_range(dollar_range)
+
+
+def patch_nav_chart_overlay_visibility(
+    figure: Any,
+    *,
+    show_btc: bool,
+    show_eth: bool,
+    show_pct_axis: bool = False,
+) -> Dict[str, Any]:
+    """Toggle overlay traces without rebuilding the figure (preserves zoom)."""
+    from dash import Patch
+
+    figure = _figure_as_dict(figure)
+    patched = Patch()
+    if not figure or not figure.get("data"):
+        return patched
+    if len(figure["data"]) < 4:
+        return patched
+    patched["data"][1]["visible"] = show_btc
+    patched["data"][2]["visible"] = show_eth
+    tcp_y = figure["data"][0].get("y", [])
+    btc_y = figure["data"][1].get("y", [])
+    eth_y = figure["data"][2].get("y", [])
+    y_range = _visible_y_range(tcp_y, btc_y, eth_y, show_btc=show_btc, show_eth=show_eth)
+    if y_range is not None:
+        patched["layout"]["yaxis"]["range"] = y_range
+        if show_pct_axis or _figure_shows_pct_axis(figure):
+            patched["layout"]["yaxis2"] = build_nav_pct_yaxis2(y_range, visible=True)
+            patched["layout"]["margin"] = dict(NAV_CHART_MARGIN_WITH_PCT_AXIS)
+    patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
+    return patched
+
+
+def patch_nav_chart_pct_axis(
+    figure: Any,
+    *,
+    show_pct_axis: bool,
+    show_btc: bool,
+    show_eth: bool,
+) -> Dict[str, Any]:
+    """Show or hide the synchronized return (%) axis without rebuilding traces."""
+    figure = deepcopy(_figure_as_dict(figure))
+    if not figure:
+        return figure
+    margin = NAV_CHART_MARGIN_WITH_PCT_AXIS if show_pct_axis else NAV_CHART_MARGIN_DEFAULT
+    figure.setdefault("layout", {})["margin"] = dict(margin)
+    dollar_range = _resolve_nav_chart_dollar_y_range(
+        figure,
+        show_btc=show_btc,
+        show_eth=show_eth,
+    )
+    figure["layout"]["yaxis2"] = build_nav_pct_yaxis2(dollar_range, visible=show_pct_axis)
+    figure["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
+    return figure
+
+
+def patch_nav_chart_pct_axis_from_relayout(
+    figure: Any,
+    relayout_data: Mapping[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Keep the right-hand % axis aligned with the primary dollar axis after zoom/pan."""
+    figure = _figure_as_dict(figure)
+    if not figure:
+        return None
+    if not relayout_data:
+        return None
+    dollar_range: Optional[List[float]] = None
+    if "yaxis.range" in relayout_data:
+        raw = relayout_data["yaxis.range"]
+        if raw and len(raw) == 2:
+            dollar_range = [float(raw[0]), float(raw[1])]
+    elif "yaxis.range[0]" in relayout_data and "yaxis.range[1]" in relayout_data:
+        dollar_range = [
+            float(relayout_data["yaxis.range[0]"]),
+            float(relayout_data["yaxis.range[1]"]),
+        ]
+    elif relayout_data.get("yaxis.autorange"):
+        show_btc = len(figure.get("data", ())) > 1 and figure["data"][1].get("visible") in (True, "true")
+        show_eth = len(figure.get("data", ())) > 2 and figure["data"][2].get("visible") in (True, "true")
+        dollar_range = _resolve_nav_chart_dollar_y_range(
+            figure,
+            show_btc=show_btc,
+            show_eth=show_eth,
+        )
+    if dollar_range is None:
+        return None
+    updated = deepcopy(figure)
+    layout = updated.setdefault("layout", {})
+    layout["yaxis2"] = build_nav_pct_yaxis2(dollar_range, visible=True)
+    layout["uirevision"] = layout.get("uirevision", NAV_CHART_UIREVISION)
+    return updated
 
 
 def _format_label_date(row_date: date) -> str:

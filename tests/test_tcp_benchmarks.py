@@ -6,6 +6,7 @@ from layout_helpers import layout_text as render_layout_text
 import json
 import socket
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +27,7 @@ from tcp_benchmarks import (
     build_scaled_benchmark_nav,
     load_spxtr_benchmark,
     normalize_provider_returns,
+    resolve_runtime_benchmark,
 )
 from tcp_dashboard import canonical_nav_records_from_ledger, propagate_tcp_dashboard
 from tcp_drawdown import SPXTR_INCEPTION_COLUMN as DD_SPXTR_COL, build_drawdown_dataframe
@@ -495,6 +497,216 @@ def test_benchmark_status_message_ready():
         )
     )
     assert "as of" in msg.lower()
+
+
+def test_benchmark_status_message_stale_does_not_claim_freshness():
+    msg = benchmark_status_message(
+        BenchmarkResult(
+            status=BENCHMARK_STATUS_STALE,
+            symbol=SPXTR_SYMBOL,
+            display_name="SPXTR",
+            as_of="2026-10-01",
+            fetched_at="2026-10-01T00:00:00+00:00",
+            returns=None,
+            warning="Benchmark data is stale; showing last successful download.",
+        )
+    )
+    assert "stale" in msg.lower()
+    assert "2026-10-01" in msg
+
+
+def _freshness_clock(day: str):
+    return lambda: datetime.fromisoformat(day)
+
+
+def _result_from_provider(provider, status=BENCHMARK_STATUS_READY, as_of="2026-10-09"):
+    series = None
+    if provider.error is None and provider.series is not None:
+        series = provider.series.copy()
+    if provider.error is not None:
+        raise provider.error
+    provider.calls += 1
+    return BenchmarkResult(
+        status=status,
+        symbol=SPXTR_SYMBOL,
+        display_name="SPXTR",
+        as_of=as_of,
+        fetched_at=f"{as_of}T00:00:00+00:00",
+        returns=series,
+        warning=None,
+    )
+
+
+def test_same_day_ready_result_is_reused(tmp_path):
+    provider = MockBenchmarkProvider(_returns_series([0.01, 0.02]))
+    holder: dict = {}
+    clock = _freshness_clock("2026-10-09T12:00:00")
+
+    def load_live(*, cache_path=None, now=None):
+        return _result_from_provider(provider)
+
+    def load_cache_only(*, cache_path=None):
+        from tcp_benchmarks import load_spxtr_benchmark_cache_only
+
+        return load_spxtr_benchmark_cache_only(cache_path=cache_path)
+
+    first = resolve_runtime_benchmark(
+        holder,
+        symbol=SPXTR_SYMBOL,
+        cache_path=tmp_path / "cache.json",
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        now=clock,
+    )
+    second = resolve_runtime_benchmark(
+        holder,
+        symbol=SPXTR_SYMBOL,
+        cache_path=tmp_path / "cache.json",
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        now=clock,
+    )
+    assert first.status == BENCHMARK_STATUS_READY
+    assert second.status == BENCHMARK_STATUS_READY
+    assert provider.calls == 1
+
+
+def test_prior_day_result_triggers_refresh(tmp_path):
+    provider = MockBenchmarkProvider(_returns_series([0.01, 0.02, 0.03]))
+    holder: dict = {}
+
+    def load_live(*, cache_path=None, now=None):
+        return _result_from_provider(provider)
+
+    def load_cache_only(*, cache_path=None):
+        from tcp_benchmarks import load_spxtr_benchmark_cache_only
+
+        return load_spxtr_benchmark_cache_only(cache_path=cache_path)
+
+    resolve_runtime_benchmark(
+        holder,
+        symbol=SPXTR_SYMBOL,
+        cache_path=tmp_path / "cache.json",
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        now=_freshness_clock("2026-10-08T12:00:00"),
+    )
+    resolve_runtime_benchmark(
+        holder,
+        symbol=SPXTR_SYMBOL,
+        cache_path=tmp_path / "cache.json",
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        now=_freshness_clock("2026-10-09T08:00:00"),
+    )
+    assert provider.calls == 2
+
+
+def test_failed_refresh_serves_last_known_good_cache(tmp_path):
+    cache = {
+        "symbol": SPXTR_SYMBOL,
+        "as_of": "2026-10-01",
+        "fetched_at": "2026-10-01T00:00:00+00:00",
+        "source": "quantstats",
+        "returns": [{"date": "2026-01-20", "value": 0.01}, {"date": "2026-10-01", "value": -0.02}],
+    }
+    cache_path = tmp_path / "cache.json"
+    cache_path.write_text(json.dumps(cache), encoding="utf-8")
+    provider = MockBenchmarkProvider(error=RuntimeError("network down"))
+    holder: dict = {}
+
+    def load_live(*, cache_path=None, now=None):
+        return load_spxtr_benchmark(provider=provider, cache_path=cache_path, timeout_seconds=1, now=now)
+
+    def load_cache_only(*, cache_path=None):
+        from tcp_benchmarks import load_spxtr_benchmark_cache_only
+
+        return load_spxtr_benchmark_cache_only(cache_path=cache_path)
+
+    result = resolve_runtime_benchmark(
+        holder,
+        symbol=SPXTR_SYMBOL,
+        cache_path=cache_path,
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        now=_freshness_clock("2026-10-09T12:00:00"),
+    )
+    assert result.status == BENCHMARK_STATUS_STALE
+    assert result.as_of == "2026-10-01"
+    assert result.returns is not None
+
+
+def test_unavailable_benchmark_does_not_raise(tmp_path):
+    provider = MockBenchmarkProvider(error=RuntimeError("offline"))
+    holder: dict = {}
+
+    def load_live(*, cache_path=None, now=None):
+        return load_spxtr_benchmark(provider=provider, cache_path=cache_path, timeout_seconds=1, now=now)
+
+    def load_cache_only(*, cache_path=None):
+        from tcp_benchmarks import load_spxtr_benchmark_cache_only
+
+        return load_spxtr_benchmark_cache_only(cache_path=cache_path)
+
+    result = resolve_runtime_benchmark(
+        holder,
+        symbol=SPXTR_SYMBOL,
+        cache_path=tmp_path / "missing.json",
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        now=_freshness_clock("2026-10-09T12:00:00"),
+    )
+    assert result.status == BENCHMARK_STATUS_UNAVAILABLE
+
+
+def test_no_repeated_fetch_storm_after_failure(tmp_path):
+    provider = MockBenchmarkProvider(error=RuntimeError("offline"))
+    holder: dict = {}
+
+    def load_live(*, cache_path=None, now=None):
+        return load_spxtr_benchmark(provider=provider, cache_path=cache_path, timeout_seconds=1, now=now)
+
+    def load_cache_only(*, cache_path=None):
+        from tcp_benchmarks import load_spxtr_benchmark_cache_only
+
+        return load_spxtr_benchmark_cache_only(cache_path=cache_path)
+
+    clock = _freshness_clock("2026-10-09T15:00:00")
+    for _ in range(8):
+        resolve_runtime_benchmark(
+            holder,
+            symbol=SPXTR_SYMBOL,
+            cache_path=tmp_path / "missing.json",
+            load_live=load_live,
+            load_cache_only=load_cache_only,
+            now=clock,
+        )
+    assert provider.calls == 1
+
+
+def test_resolve_runtime_benchmark_does_not_write_state_json(tmp_path):
+    state_path = tmp_path / "tcp_daily_returns_secret_state.json"
+    state_path.write_text('{"revision": 1}', encoding="utf-8")
+    before = state_path.read_text(encoding="utf-8")
+    provider = MockBenchmarkProvider(_returns_series([0.01]))
+
+    def load_live(*, cache_path=None, now=None):
+        return load_spxtr_benchmark(provider=provider, cache_path=cache_path, timeout_seconds=1, now=now)
+
+    def load_cache_only(*, cache_path=None):
+        from tcp_benchmarks import load_spxtr_benchmark_cache_only
+
+        return load_spxtr_benchmark_cache_only(cache_path=cache_path)
+
+    resolve_runtime_benchmark(
+        {},
+        symbol=SPXTR_SYMBOL,
+        cache_path=tmp_path / "cache.json",
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        now=_freshness_clock("2026-10-09T12:00:00"),
+    )
+    assert state_path.read_text(encoding="utf-8") == before
 
 
 def test_store_roundtrip():

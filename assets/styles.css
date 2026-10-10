@@ -240,6 +240,14 @@ body, #page-container {
   width: 100% !important;
   height: auto !important;
 }
+
+/* TKP public NAV chart — match tearsheet title styling (no HTML underline) */
+#NAV-graph .gtitle,
+#NAV-graph .gtitle tspan {
+  fill: var(--primary-color) !important;
+  text-decoration: none !important;
+  font-weight: 500;
+}
 #bench-overlay {
   width: 100% !important;
   height: auto !important;
@@ -523,11 +531,37 @@ body, #page-container {
   color: #664d03;
 }
 
-.tcp-nav-chart-container {
-  width: 95%;
+.tcp-nav-chart-section {
+  width: 100%;
   max-width: 100%;
-  margin: 0 auto var(--spacing-unit);
+  overflow-x: hidden;
+}
+
+.tcp-nav-chart-section-inner {
+  width: min(100%, 56rem);
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 clamp(0.35rem, 2vw, 0.75rem);
+  box-sizing: border-box;
+}
+
+.tcp-nav-chart-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
   page-break-inside: avoid;
+}
+
+.tcp-nav-chart-plot-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: clamp(360px, 46vh, 460px);
+  min-height: 360px;
+  margin: 0 0 0.35rem;
+  overflow: hidden;
+  clear: both;
+  box-sizing: border-box;
 }
 
 .chart-container {
@@ -537,11 +571,203 @@ body, #page-container {
   page-break-inside: avoid;
 }
 
-#nav-preview-graph,
+.tcp-nav-chart-plot-wrap #nav-preview-graph,
+.tcp-nav-chart-plot-wrap .dash-graph,
+.tcp-nav-chart-plot-wrap .js-plotly-plot,
+.tcp-nav-chart-plot-wrap .plot-container,
 #NAV-graph {
   width: 100% !important;
-  height: auto !important;
-  min-height: 320px;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+}
+
+.tcp-nav-chart-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 0.5rem;
+}
+
+.tcp-nav-overlay-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.tcp-nav-overlay-label {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.tcp-nav-overlay-checklist {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.tcp-nav-overlay-checklist .form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.55rem 0.4rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.tcp-nav-overlay-checklist .form-check-input,
+.tcp-nav-overlay-input {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  min-height: 17px;
+  max-width: 17px;
+  max-height: 17px;
+  margin: 0;
+  flex: 0 0 17px;
+  cursor: pointer;
+}
+
+.tcp-nav-overlay-check-label {
+  margin: 0;
+  padding: 0;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.tcp-nav-details {
+  width: 100%;
+  margin: 0.2rem 0 0.75rem;
+  color: #6c757d;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.tcp-nav-footer-summary {
+  display: block;
+  cursor: pointer;
+  list-style: none;
+  color: #6c757d;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.tcp-nav-footer-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tcp-nav-footer-summary::marker {
+  content: "";
+}
+
+.tcp-nav-details-label {
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.tcp-nav-footer-benchmark:not(:empty)::before,
+.tcp-nav-details-label::before {
+  content: " · ";
+}
+
+.tcp-nav-footer-summary:focus-visible {
+  outline: 2px solid var(--primary-color, #0d3562);
+  outline-offset: 3px;
+}
+
+.tcp-nav-details:not([open]) > .tcp-nav-chart-notes {
+  display: none;
+}
+
+.tcp-nav-details[open] > .tcp-nav-chart-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  clear: both;
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  color: #6c757d;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.tcp-nav-chart-notes p {
+  margin: 0;
+}
+
+.tcp-overlay-note,
+.tcp-nav-footnote-primary,
+.tcp-nav-footnote-secondary {
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.tcp-nav-footnote-secondary {
+  margin-bottom: 2rem;
+}
+
+.tcp-nav-overlay-btc-label {
+  color: #F7931A;
+}
+
+.tcp-nav-overlay-eth-label {
+  color: #627EEA;
+}
+
+.tcp-nav-overlay-pct-label {
+  color: var(--primary-color);
+}
+
+.tcp-nav-overlay-pct {
+  margin-left: 0.15rem;
+}
+
+@media (max-width: 480px) {
+  .tcp-nav-overlay-controls {
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+  .tcp-nav-overlay-pct {
+    margin-left: 0;
+  }
+}
+
+.tcp-overlay-attribution-row {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.tcp-overlay-attribution-text {
+  display: inline;
+}
+
+@media (min-width: 900px) {
+  .tcp-overlay-attribution-row {
+    white-space: normal;
+  }
+}
+
+.tcp-overlay-stale-row {
+  width: 100%;
+  margin: 0;
 }
 
 @media (min-width: 1024px) and (max-width: 1439px) {
@@ -822,6 +1048,37 @@ body,
 }
 
 @media (max-width: 768px) {
+  #monthly-calendar-container {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .tcp-monthly-performance-wrapper {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: auto;
+  }
+
+  .tcp-monthly-performance-wrapper > .tcp-monthly-performance {
+    width: max-content;
+    min-width: 56rem;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .tcp-monthly-performance-wrapper .tcp-monthly-performance th,
+  .tcp-monthly-performance-wrapper .tcp-monthly-performance td {
+    white-space: nowrap;
+  }
+
   #page-container {
     width: 100%;
     padding: calc(var(--spacing-unit) * 0.75);
@@ -832,15 +1089,20 @@ body,
     margin-right: 0;
   }
 
-  #nav-preview-graph,
-  #NAV-graph {
-    min-height: 260px;
-    max-height: 360px;
+  .tcp-nav-chart-plot-wrap {
+    height: clamp(320px, 58vw, 400px);
+    min-height: 320px;
+    margin-bottom: 0.35rem;
   }
 
-  .tcp-nav-chart-container {
+  .tcp-nav-chart-header {
     width: 100%;
-    max-width: 100%;
+    justify-content: flex-start;
+  }
+
+  .tcp-nav-overlay-controls {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .tcp-two-column-row > [class*="col-"] {

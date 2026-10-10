@@ -166,7 +166,15 @@ def test_canonical_store_matches_chart_series(tkp_mod, state_rows):
     assert by_date["2026-07-09"] == pytest.approx(192_875.99, abs=0.01)
 
 
-def test_fee_hwm_nav_ledger_unchanged(tkp_mod, state_rows):
+def test_fee_hwm_synthetic_nav_unchanged(tkp_mod, state_rows):
     jul9 = next(r for r in state_rows if str(r.get("Date", "")).startswith("2026-07-09"))
     assert jul9["NAV"] == "$192,875.99"
     assert jul9["StoneX"] == "$82,838.14"
+
+
+def test_nav_chart_title_is_standard_public_wording(tkp_mod):
+    layout = tkp_mod._tkp_nav_chart_title_layout()
+    assert layout["text"] == tkp_mod.TKP_NAV_CHART_TITLE
+    assert layout["text"] == "Nominal Non-Compounded Performance Since Inception"
+    assert "<u>" not in layout["text"]
+    assert layout["font"]["color"] == tkp_mod.PRIMARY_COLOR

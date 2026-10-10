@@ -286,9 +286,10 @@ def test_empty_nav_figure():
     assert fig.layout.annotations
 
 
-def test_no_percentage_axis():
-    with pytest.raises(ValueError):
-        build_tcp_nav_figure(_sample_records(), show_percentage_axis=True)
+def test_optional_percentage_axis():
+    fig = build_tcp_nav_figure(_sample_records(), show_percentage_axis=True)
+    assert fig.layout.yaxis2.visible is True
+    assert fig.layout.yaxis.title.text == "Value ($)"
 
 
 def test_nav_figure_input_immutability(canonical):

@@ -78,6 +78,7 @@ from tcp_benchmarks import (
     DEFAULT_CACHE_FILENAME,
     ETH_DISPLAY_NAME,
     ETH_SYMBOL,
+    SPXTR_SYMBOL,
     benchmark_status_message,
     load_btc_benchmark,
     load_btc_benchmark_cache_only,
@@ -85,10 +86,14 @@ from tcp_benchmarks import (
     load_eth_benchmark_cache_only,
     load_spxtr_benchmark,
     load_spxtr_benchmark_cache_only,
+    resolve_runtime_benchmark,
 )
+from tcp_nav_overlays import build_nav_overlay_bundle, compact_selected_benchmark_attribution
 from tcp_dashboard import (
     GREY_BG,
+    build_tcp_nav_chart_figure,
     build_tcp_current_data_labels,
+    patch_nav_chart_overlay_visibility,
     propagate_tcp_dashboard,
 )
 from tcp_ledger import TCPLedgerError
@@ -109,7 +114,6 @@ from tcp_public_sections import (
     HEADER_ROW_CLASS,
     MODE_ALERT_CLASS,
     MONTHLY_PERFORMANCE_CLASS,
-    NAV_CHART_CONTAINER_CLASS,
     POST_ACCOUNT_DISCLAIMERS_CLASS,
     PREVIEW_BANNER_CLASS,
     PUBLIC_CARD_CLASS,
@@ -120,7 +124,14 @@ from tcp_public_sections import (
     build_inline_performance_disclaimers,
     build_drawdown_profile_card,
     build_investor_information,
-    build_nav_footnotes,
+    build_nav_chart_section,
+    TCP_OVERLAY_BTC_ID,
+    TCP_OVERLAY_ETH_ID,
+    TCP_NAV_PCT_AXIS_ID,
+    TCP_OVERLAY_ATTRIBUTION_ID,
+    TCP_OVERLAY_SOURCE_ID,
+    TCP_OVERLAY_CUTOFF_STORE_ID,
+    TCP_OVERLAY_STALE_ID,
     build_public_disclosure_panel,
     build_public_footer,
     build_public_gate_wrapper,
@@ -367,16 +378,14 @@ def _resolve_drawdown_benchmark(
     load_live,
     load_cache_only,
 ) -> BenchmarkResult:
-    cache = runtime_holder.setdefault("drawdown_benchmarks", {})
-    existing = cache.get(symbol)
-    if isinstance(existing, BenchmarkResult):
-        return existing
-    if _skip_benchmark_fetch():
-        result = load_cache_only(cache_path=cache_path)
-    else:
-        result = load_live(cache_path=cache_path)
-    cache[symbol] = result
-    return result
+    return resolve_runtime_benchmark(
+        runtime_holder,
+        symbol=symbol,
+        cache_path=cache_path,
+        load_live=load_live,
+        load_cache_only=load_cache_only,
+        skip_fetch=_skip_benchmark_fetch(),
+    )
 
 
 def _resolve_btc_benchmark_result(runtime_holder: Dict[str, Any]) -> BenchmarkResult:
@@ -427,16 +436,27 @@ def _unavailable_benchmark_result() -> BenchmarkResult:
 
 
 def _resolve_benchmark_result(runtime_holder: Dict[str, Any]) -> BenchmarkResult:
-    existing = runtime_holder.get("benchmark")
-    if isinstance(existing, BenchmarkResult):
-        return existing
-    cache_path = _benchmark_cache_path()
-    if _skip_benchmark_fetch():
-        result = load_spxtr_benchmark_cache_only(cache_path=cache_path)
-    else:
-        result = load_spxtr_benchmark(cache_path=cache_path)
-    runtime_holder["benchmark"] = result
-    return result
+    return resolve_runtime_benchmark(
+        runtime_holder,
+        symbol=SPXTR_SYMBOL,
+        cache_path=_benchmark_cache_path(),
+        load_live=load_spxtr_benchmark,
+        load_cache_only=load_spxtr_benchmark_cache_only,
+        skip_fetch=_skip_benchmark_fetch(),
+        result_key="benchmark",
+    )
+
+
+def _overlay_bundle(records: List[Dict[str, Any]], runtime_holder: Dict[str, Any]):
+    return build_nav_overlay_bundle(
+        records,
+        _resolve_btc_benchmark_result(runtime_holder),
+        _resolve_eth_benchmark_result(runtime_holder),
+    )
+
+
+def _overlay_checklist_enabled(values: Optional[List[str]], token: str) -> bool:
+    return token in (values or [])
 
 
 def _benchmark_notice_component(result: BenchmarkResult) -> html.Div:
@@ -451,16 +471,24 @@ def _benchmark_notice_component(result: BenchmarkResult) -> html.Div:
     return dbc.Alert(message, color=alert_color, className=benchmark_notice_class(result.status))
 
 
-def build_preview_layout(cfg: TCPConfig, state: PreviewState, benchmark_result: BenchmarkResult) -> html.Div:
+def build_preview_layout(
+    cfg: TCPConfig,
+    state: PreviewState,
+    benchmark_result: BenchmarkResult,
+    runtime_holder: Optional[Dict[str, Any]] = None,
+) -> html.Div:
     snapshot = state.snapshot
     assert snapshot is not None
+    holder = runtime_holder if runtime_holder is not None else {}
     meta = snapshot.ledger.metadata
     first_completed = meta.first_completed_date.strftime("%B %d, %Y") if meta.first_completed_date else "—"
     propagation = _propagate_with_drawdown_benchmarks(
         snapshot.canonical_nav,
-        {},
+        holder,
         benchmark_result,
     )
+    overlay_bundle = _overlay_bundle(snapshot.canonical_nav, holder)
+    nav_figure = build_tcp_nav_chart_figure(overlay_bundle, show_btc=False, show_eth=False)
     mode_alert = (
         "JSON state is authoritative. Authenticated Add/Delete persist to preview JSON."
         if cfg.persistence_enabled and snapshot.data_source == "json"
@@ -545,17 +573,7 @@ def build_preview_layout(cfg: TCPConfig, state: PreviewState, benchmark_result: 
                 ),
                 build_firm_intro(),
                 *mode_alert_block,
-                html.Div(
-                    dcc.Graph(
-                        id="nav-preview-graph",
-                        figure=propagation.nav_figure,
-                        config={"displayModeBar": False, "responsive": True},
-                        style={"width": "100%", "maxWidth": "100%", "maxHeight": "400px", "pageBreakInside": "avoid"},
-                    ),
-                    className=NAV_CHART_CONTAINER_CLASS,
-                    id="tcp-nav-chart-container",
-                ),
-                *build_nav_footnotes(),
+                build_nav_chart_section(nav_figure, overlay_bundle),
                 html.H5("Performance Summary", className="text-center mb-2"),
                 html.Div(_monthly_table_component(propagation.monthly_calendar), id="monthly-calendar-container"),
                 build_two_column_shell_row(
@@ -950,6 +968,17 @@ def apply_tcp_recalculation(
     }
 
 
+def _overlay_stale_children(bundle: Any) -> List[Any]:
+    return [
+        html.Span(
+            notice,
+            className="text-muted tcp-overlay-stale-notice",
+            id=f"tcp-overlay-stale-notice-{index}",
+        )
+        for index, notice in enumerate(getattr(bundle, "stale_notices", ()) or ())
+    ]
+
+
 def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any]) -> None:
     @app.callback(
         Output("nav-preview-graph", "figure"),
@@ -959,10 +988,15 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
         Output("tcp-benchmark-notice", "children"),
         Output("data-current-label-desktop", "children"),
         Output("data-current-label-mobile", "children"),
+        Output(TCP_OVERLAY_SOURCE_ID, "children"),
+        Output(TCP_OVERLAY_CUTOFF_STORE_ID, "data"),
+        Output(TCP_OVERLAY_STALE_ID, "children"),
         Input("canonical-nav-store", "data"),
         Input("benchmark-store", "data"),
+        State(TCP_OVERLAY_BTC_ID, "value"),
+        State(TCP_OVERLAY_ETH_ID, "value"),
     )
-    def _propagate_dashboard_outputs(canonical_data, benchmark_data):
+    def _propagate_dashboard_outputs(canonical_data, benchmark_data, btc_overlay, eth_overlay):
         records = canonical_data or []
         benchmark_result = (
             BenchmarkResult.from_store_dict(benchmark_data)
@@ -974,15 +1008,218 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
             runtime_holder,
             benchmark_result,
         )
+        overlay_bundle = _overlay_bundle(records, runtime_holder)
+        show_btc = _overlay_checklist_enabled(btc_overlay, "btc")
+        show_eth = _overlay_checklist_enabled(eth_overlay, "eth")
+        nav_figure = build_tcp_nav_chart_figure(
+            overlay_bundle,
+            show_btc=show_btc,
+            show_eth=show_eth,
+        )
         return (
-            propagation.nav_figure,
+            nav_figure,
             _monthly_table_component(propagation.monthly_calendar),
             _daily_perf_table_component(propagation.daily_performance),
             _drawdown_table_component(propagation.drawdown_profile),
             _benchmark_notice_component(benchmark_result),
             _desktop_label_children(propagation.desktop_label.header, propagation.desktop_label.date_line),
             _mobile_label_children(propagation.mobile_label.header, propagation.mobile_label.date_line),
+            overlay_bundle.attribution_row or "",
+            {
+                "btc": overlay_bundle.btc_through_label,
+                "eth": overlay_bundle.eth_through_label,
+            },
+            _overlay_stale_children(overlay_bundle),
         )
+
+    @app.callback(
+        Output(TCP_OVERLAY_ATTRIBUTION_ID, "children"),
+        Input(TCP_OVERLAY_BTC_ID, "value"),
+        Input(TCP_OVERLAY_ETH_ID, "value"),
+        Input(TCP_OVERLAY_CUTOFF_STORE_ID, "data"),
+    )
+    def _compact_nav_footer_attribution(btc_overlay, eth_overlay, cutoff_store):
+        payload = cutoff_store or {}
+        return compact_selected_benchmark_attribution(
+            show_btc=_overlay_checklist_enabled(btc_overlay, "btc"),
+            show_eth=_overlay_checklist_enabled(eth_overlay, "eth"),
+            btc_through=payload.get("btc"),
+            eth_through=payload.get("eth"),
+        )
+
+    @app.callback(
+        Output("nav-preview-graph", "figure", allow_duplicate=True),
+        Input(TCP_OVERLAY_BTC_ID, "value"),
+        Input(TCP_OVERLAY_ETH_ID, "value"),
+        State("nav-preview-graph", "figure"),
+        State(TCP_NAV_PCT_AXIS_ID, "value"),
+        prevent_initial_call=True,
+    )
+    def _toggle_nav_overlays(btc_overlay, eth_overlay, figure, pct_axis):
+        if not figure:
+            raise PreventUpdate
+        show_btc = _overlay_checklist_enabled(btc_overlay, "btc")
+        show_eth = _overlay_checklist_enabled(eth_overlay, "eth")
+        show_pct = _overlay_checklist_enabled(pct_axis, "pct")
+        return patch_nav_chart_overlay_visibility(
+            figure,
+            show_btc=show_btc,
+            show_eth=show_eth,
+            show_pct_axis=show_pct,
+        )
+
+    app.clientside_callback(
+        """
+        function(pctAxis, figure) {
+            if (!figure || !figure.layout || !figure.layout.yaxis) {
+                return window.dash_clientside.no_update;
+            }
+            function pctTicks(yr) {
+                const baseline = 50000;
+                const p0 = (yr[0] / baseline - 1) * 100;
+                const p1 = (yr[1] / baseline - 1) * 100;
+                const span = Math.abs(p1 - p0);
+                let step = 1;
+                if (span > 50) step = 10;
+                else if (span > 20) step = 5;
+                else if (span > 10) step = 2;
+                const tickStart = Math.floor(p0 / step - 1) * step;
+                const tickEnd = Math.ceil(p1 / step + 2) * step;
+                const tickvals = [];
+                const ticktext = [];
+                for (let pct = tickStart; pct <= tickEnd; pct += step) {
+                    tickvals.push(baseline * (1 + pct / 100));
+                    ticktext.push(pct.toFixed(0) + "%");
+                }
+                return {tickvals, ticktext, range: [yr[0], yr[1]]};
+            }
+            const show = Array.isArray(pctAxis) && pctAxis.indexOf("pct") !== -1;
+            const updated = JSON.parse(JSON.stringify(figure));
+            const plot = document.querySelector("#nav-preview-graph .js-plotly-plot");
+            const margin = Object.assign(
+                {l: 48, r: 12, t: 56, b: 52},
+                updated.layout.margin || {}
+            );
+            const yr =
+                updated.layout.yaxis.range ||
+                (plot && plot._fullLayout && plot._fullLayout.yaxis
+                    ? plot._fullLayout.yaxis.range
+                    : null);
+            if (show && yr && yr.length === 2) {
+                margin.r = 72;
+                const ticks = pctTicks(yr);
+                updated.layout.yaxis2 = Object.assign({}, updated.layout.yaxis2 || {}, {
+                    title: {text: "Return since inception (%)"},
+                    overlaying: "y",
+                    side: "right",
+                    visible: true,
+                    showticklabels: true,
+                    showline: true,
+                    ticklen: 4,
+                    showgrid: false,
+                    zeroline: false,
+                    automargin: true,
+                    fixedrange: true,
+                    tickmode: "array",
+                    tickvals: ticks.tickvals,
+                    ticktext: ticks.ticktext,
+                    range: ticks.range,
+                });
+            } else {
+                margin.r = 12;
+                updated.layout.yaxis2 = Object.assign({}, updated.layout.yaxis2 || {}, {
+                    overlaying: "y",
+                    side: "right",
+                    visible: true,
+                    showticklabels: false,
+                    showline: false,
+                    ticklen: 0,
+                    title: {text: ""},
+                });
+            }
+            updated.layout.margin = margin;
+            return updated;
+        }
+        """,
+        Output("nav-preview-graph", "figure", allow_duplicate=True),
+        Input(TCP_NAV_PCT_AXIS_ID, "value"),
+        State("nav-preview-graph", "figure"),
+        prevent_initial_call=True,
+    )
+
+    app.clientside_callback(
+        """
+        function(relayoutData, figure, pctAxis) {
+            if (
+                !figure ||
+                !figure.layout ||
+                !figure.layout.yaxis ||
+                !Array.isArray(pctAxis) ||
+                pctAxis.indexOf("pct") === -1 ||
+                !relayoutData
+            ) {
+                return window.dash_clientside.no_update;
+            }
+            let y0;
+            let y1;
+            if (relayoutData["yaxis.range"]) {
+                y0 = relayoutData["yaxis.range"][0];
+                y1 = relayoutData["yaxis.range"][1];
+            } else if (
+                relayoutData["yaxis.range[0]"] !== undefined &&
+                relayoutData["yaxis.range[1]"] !== undefined
+            ) {
+                y0 = relayoutData["yaxis.range[0]"];
+                y1 = relayoutData["yaxis.range[1]"];
+            } else {
+                return window.dash_clientside.no_update;
+            }
+            const baseline = 50000;
+            const p0 = (y0 / baseline - 1) * 100;
+            const p1 = (y1 / baseline - 1) * 100;
+            const span = Math.abs(p1 - p0);
+            let step = 1;
+            if (span > 50) step = 10;
+            else if (span > 20) step = 5;
+            else if (span > 10) step = 2;
+            const tickStart = Math.floor(p0 / step - 1) * step;
+            const tickEnd = Math.ceil(p1 / step + 2) * step;
+            const tickvals = [];
+            const ticktext = [];
+            for (let pct = tickStart; pct <= tickEnd; pct += step) {
+                tickvals.push(baseline * (1 + pct / 100));
+                ticktext.push(pct.toFixed(0) + "%");
+            }
+            const updated = JSON.parse(JSON.stringify(figure));
+            updated.layout.yaxis2 = Object.assign({}, updated.layout.yaxis2 || {}, {
+                title: {text: "Return since inception (%)"},
+                overlaying: "y",
+                side: "right",
+                visible: true,
+                showticklabels: true,
+                showline: true,
+                showgrid: false,
+                zeroline: false,
+                automargin: true,
+                fixedrange: true,
+                tickmode: "array",
+                tickvals: tickvals,
+                ticktext: ticktext,
+                range: [y0, y1],
+            });
+            updated.layout.margin = Object.assign(
+                {l: 48, r: 72, t: 56, b: 52},
+                updated.layout.margin || {}
+            );
+            return updated;
+        }
+        """,
+        Output("nav-preview-graph", "figure", allow_duplicate=True),
+        Input("nav-preview-graph", "relayoutData"),
+        State("nav-preview-graph", "figure"),
+        State(TCP_NAV_PCT_AXIS_ID, "value"),
+        prevent_initial_call=True,
+    )
 
 
 def _register_admin_callbacks(
@@ -1379,7 +1616,7 @@ def create_app(
             live_snap = runtime_holder.get("snapshot") or state.snapshot
             live_state = PreviewState(snapshot=live_snap)
             live_benchmark = _resolve_benchmark_result(runtime_holder)
-            return build_preview_layout(cfg, live_state, live_benchmark)
+            return build_preview_layout(cfg, live_state, live_benchmark, runtime_holder)
 
         app.layout = _tcp_live_layout
         _register_access_callbacks(app, auth_manager, runtime_holder, export_filename=cfg.export_filename)

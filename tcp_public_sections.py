@@ -52,6 +52,20 @@ PUBLIC_CARD_CLASS = "mb-4 tcp-public-card"
 DESKTOP_TWO_COLUMN_ROW_CLASS = "mb-2 tcp-two-column-row"
 MONTHLY_PERFORMANCE_CLASS = "table-responsive tcp-monthly-performance"
 NAV_CHART_CONTAINER_CLASS = "tcp-nav-chart-container"
+TCP_NAV_CHART_SECTION_INNER_CLASS = "tcp-nav-chart-section-inner"
+TCP_NAV_CHART_PLOT_WRAP_CLASS = "tcp-nav-chart-plot-wrap"
+TCP_NAV_CHART_NOTES_CLASS = "tcp-nav-chart-notes"
+TCP_OVERLAY_BTC_ID = "tcp-overlay-btc"
+TCP_OVERLAY_ETH_ID = "tcp-overlay-eth"
+TCP_NAV_PCT_AXIS_ID = "tcp-overlay-pct-axis"
+TCP_NAV_OVERLAY_CONTROLS_CLASS = "tcp-nav-overlay-controls"
+TCP_NAV_CHART_HEADER_CLASS = "tcp-nav-chart-header"
+TCP_OVERLAY_ATTRIBUTION_ID = "tcp-overlay-attribution"
+TCP_OVERLAY_SOURCE_ID = "tcp-overlay-source-detail"
+TCP_OVERLAY_CUTOFF_STORE_ID = "tcp-overlay-cutoff-store"
+TCP_NAV_DETAILS_ID = "tcp-nav-chart-details"
+TCP_OVERLAY_STALE_ID = "tcp-overlay-stale-notices"
+TCP_OVERLAY_NOTE_ID = "tcp-overlay-note"
 PREVIEW_BANNER_CLASS = "text-center fw-bold tcp-preview-banner"
 MODE_ALERT_CLASS = "tcp-mode-alert"
 DAILY_METRICS_TABLE_CLASS = "fixed-cols tcp-daily-metrics-table"
@@ -144,8 +158,9 @@ disclaimer_text = GENERAL_DISCLAIMER_TEXT
 footer_contact = FOOTER_CONTACT
 
 NAV_FOOTNOTE_PRIMARY = (
-    "This chart visualizes the growth of a $50,000 investment from inception to today. "
-    "NAV stands for Net Asset Value; it reflects the non-compounded performance, net of all fees."
+    "This chart visualizes the growth of a $50,000 investment from inception through the "
+    "latest completed ledger date. NAV stands for Net Asset Value; it reflects the "
+    "non-compounded performance, net of all fees."
 )
 
 NAV_FOOTNOTE_SECONDARY = (
@@ -215,6 +230,7 @@ def mobile_responsive_contract() -> Dict[str, str]:
         "drawdown_table": DRAWDOWN_TABLE_CLASS,
         "drawdown_section": DRAWDOWN_SECTION_CLASS,
         "nav_chart_container": NAV_CHART_CONTAINER_CLASS,
+        "nav_overlay_controls": TCP_NAV_OVERLAY_CONTROLS_CLASS,
         "two_column_row": DESKTOP_TWO_COLUMN_ROW_CLASS,
         "disclosure_panel": "tcp-public-disclosure-panel",
         "daily_values_section": "tcp-daily-values-section",
@@ -252,6 +268,7 @@ def desktop_visual_contract() -> Dict[str, str]:
         "public_card": PUBLIC_CARD_CLASS,
         "monthly_performance": MONTHLY_PERFORMANCE_CLASS,
         "nav_chart_container": NAV_CHART_CONTAINER_CLASS,
+        "nav_overlay_controls": TCP_NAV_OVERLAY_CONTROLS_CLASS,
         "preview_banner": PREVIEW_BANNER_CLASS,
         "daily_metrics_table": DAILY_METRICS_TABLE_CLASS,
         "drawdown_table": DRAWDOWN_TABLE_CLASS,
@@ -772,17 +789,145 @@ def build_nav_footnotes() -> List[Any]:
     return [
         html.P(
             NAV_FOOTNOTE_PRIMARY,
-            className="text-center small",
-            style={"marginTop": "4rem"},
+            className="tcp-nav-footnote-primary",
             id="tcp-nav-footnote-primary",
         ),
         html.P(
             NAV_FOOTNOTE_SECONDARY,
-            className="text-center small",
-            style={"marginBottom": "3rem"},
+            className="tcp-nav-footnote-secondary",
             id="tcp-nav-footnote-secondary",
         ),
     ]
+
+
+def build_nav_overlay_controls() -> html.Div:
+    return html.Div(
+        [
+            html.Span("Overlays:", className="tcp-nav-overlay-label"),
+            dbc.Checklist(
+                options=[{"label": " BTC", "value": "btc"}],
+                value=[],
+                id=TCP_OVERLAY_BTC_ID,
+                inline=True,
+                className="tcp-nav-overlay-checklist tcp-nav-overlay-btc",
+                inputClassName="tcp-nav-overlay-input",
+                labelClassName="tcp-nav-overlay-check-label tcp-nav-overlay-btc-label",
+            ),
+            dbc.Checklist(
+                options=[{"label": " ETH", "value": "eth"}],
+                value=[],
+                id=TCP_OVERLAY_ETH_ID,
+                inline=True,
+                className="tcp-nav-overlay-checklist tcp-nav-overlay-eth",
+                inputClassName="tcp-nav-overlay-input",
+                labelClassName="tcp-nav-overlay-check-label tcp-nav-overlay-eth-label",
+            ),
+            dbc.Checklist(
+                options=[{"label": " % axis", "value": "pct"}],
+                value=[],
+                id=TCP_NAV_PCT_AXIS_ID,
+                inline=True,
+                className="tcp-nav-overlay-checklist tcp-nav-overlay-pct",
+                inputClassName="tcp-nav-overlay-input",
+                labelClassName="tcp-nav-overlay-check-label tcp-nav-overlay-pct-label",
+            ),
+        ],
+        className=TCP_NAV_OVERLAY_CONTROLS_CLASS,
+        id="tcp-nav-overlay-controls",
+    )
+
+
+def build_nav_chart_section(figure: Any, overlay_bundle: Any) -> html.Div:
+    """Single NAV chart with optional overlay controls and benchmark attribution."""
+    from tcp_comparison import OVERLAY_DISCLOSURE
+
+    stale_children: List[Any] = []
+    for index, notice in enumerate(getattr(overlay_bundle, "stale_notices", ()) or ()):
+        stale_children.append(
+            html.Span(
+                notice,
+                className="text-muted tcp-overlay-stale-notice",
+                id=f"tcp-overlay-stale-notice-{index}",
+            )
+        )
+    attribution = getattr(overlay_bundle, "attribution_row", "") or ""
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        build_nav_overlay_controls(),
+                        className=TCP_NAV_CHART_HEADER_CLASS,
+                        id="tcp-nav-chart-header",
+                    ),
+                    html.Div(
+                        dcc.Graph(
+                            id="nav-preview-graph",
+                            figure=figure,
+                            config={"displayModeBar": False, "responsive": True},
+                            style={"width": "100%", "height": "100%"},
+                        ),
+                        className=f"{NAV_CHART_CONTAINER_CLASS} {TCP_NAV_CHART_PLOT_WRAP_CLASS}",
+                        id="tcp-nav-chart-container",
+                    ),
+                    dcc.Store(
+                        id=TCP_OVERLAY_CUTOFF_STORE_ID,
+                        data={
+                            "btc": getattr(overlay_bundle, "btc_through_label", None),
+                            "eth": getattr(overlay_bundle, "eth_through_label", None),
+                        },
+                    ),
+                    html.Details(
+                        [
+                            html.Summary(
+                                [
+                                    html.Span(
+                                        "$50,000 baseline · TCP net of fees",
+                                        className="tcp-nav-footer-static",
+                                    ),
+                                    html.Span(
+                                        "",
+                                        id=TCP_OVERLAY_ATTRIBUTION_ID,
+                                        className="tcp-nav-footer-benchmark",
+                                    ),
+                                    html.Span("Details", className="tcp-nav-details-label"),
+                                ],
+                                className="tcp-nav-footer-summary",
+                            ),
+                            html.Div(
+                                [
+                                    html.Div(
+                                        stale_children,
+                                        className="tcp-overlay-stale-row",
+                                        id=TCP_OVERLAY_STALE_ID,
+                                    ),
+                                    html.P(
+                                        OVERLAY_DISCLOSURE,
+                                        className="tcp-overlay-note",
+                                        id=TCP_OVERLAY_NOTE_ID,
+                                    ),
+                                    html.P(
+                                        attribution,
+                                        className="tcp-overlay-source-detail",
+                                        id=TCP_OVERLAY_SOURCE_ID,
+                                    ),
+                                    *build_nav_footnotes(),
+                                ],
+                                className=TCP_NAV_CHART_NOTES_CLASS,
+                                id="tcp-nav-chart-notes",
+                            ),
+                        ],
+                        id=TCP_NAV_DETAILS_ID,
+                        className="tcp-nav-details",
+                    ),
+                ],
+                className=TCP_NAV_CHART_SECTION_INNER_CLASS,
+                id="tcp-nav-chart-section-inner",
+            ),
+        ],
+        id="tcp-nav-chart-section",
+        className=f"{PUBLIC_SECTION_CLASS} tcp-nav-chart-section",
+    )
 
 
 def build_public_disclosure_panel() -> dbc.Row:
