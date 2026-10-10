@@ -783,7 +783,7 @@ def build_nav_footnotes() -> List[Any]:
         html.P(
             NAV_FOOTNOTE_PRIMARY,
             className="text-center small",
-            style={"marginTop": "4rem"},
+            style={"marginTop": "1.25rem"},
             id="tcp-nav-footnote-primary",
         ),
         html.P(
@@ -849,9 +849,9 @@ def build_nav_chart_section(figure: Any, overlay_bundle: Any) -> html.Div:
                     id="nav-preview-graph",
                     figure=figure,
                     config={"displayModeBar": False, "responsive": True},
-                    style={"width": "100%", "maxWidth": "100%", "maxHeight": "400px", "pageBreakInside": "avoid"},
+                    style={"width": "100%", "maxWidth": "100%", "pageBreakInside": "avoid"},
                 ),
-                className=NAV_CHART_CONTAINER_CLASS,
+                className=f"{NAV_CHART_CONTAINER_CLASS} tcp-nav-chart-plot-wrap",
                 id="tcp-nav-chart-container",
             ),
             html.Div(
@@ -871,7 +871,7 @@ def build_nav_chart_section(figure: Any, overlay_bundle: Any) -> html.Div:
             ),
             html.P(
                 OVERLAY_DISCLOSURE,
-                className="text-center small",
+                className="text-center small tcp-overlay-note",
                 id=TCP_OVERLAY_NOTE_ID,
             ),
             *build_nav_footnotes(),

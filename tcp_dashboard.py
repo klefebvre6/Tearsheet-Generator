@@ -431,7 +431,7 @@ def build_tcp_nav_chart_figure(
         showlegend=False,
         hovermode="x unified",
         uirevision=NAV_CHART_UIREVISION,
-        margin={"l": 48, "r": 12, "t": 56, "b": 36},
+        margin={"l": 48, "r": 12, "t": 56, "b": 52},
     )
     fig.update_xaxes(showgrid=True, automargin=True, tickangle=-25)
     yaxis_kwargs: Dict[str, Any] = {"showgrid": True, "automargin": True, "tickprefix": "$", "tickformat": ",.0f"}
