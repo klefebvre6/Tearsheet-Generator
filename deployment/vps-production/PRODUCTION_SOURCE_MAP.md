@@ -7,9 +7,9 @@ Remote: `https://github.com/klefebvre6/Tearsheet-Generator.git`
 
 No secret values are recorded here. `C:\HC\apps` was not modified.
 
-No single branch contains every running component. `origin/main` is `f540135c070b8e2143c098327bc088085e31c94f` (merge of PR #62, 2026-07-22). `origin/live-main` is `3cfda4fdde5eaa8fae42c87b56d30d34aa717f68` (2026-07-31). Both are ancestors of the commits below. Neither contains the October VPS commits. `ops/vps-production-rebuildability-20261010` at `a3aa50a7b7abe9e827b121661d1c37441e5e80a1` is on origin and contains only the uploader line plus `deployment/vps-production/`. The future combination is in `C:\HC\deployment\GIT_CONSOLIDATION_PLAN.md`. It has not been started.
+No single branch contains every running component. `origin/main` is `f540135c070b8e2143c098327bc088085e31c94f` (merge of PR #62, 2026-07-22). `origin/live-main` is `3cfda4fdde5eaa8fae42c87b56d30d34aa717f68` (2026-07-31). Both are ancestors of the commits below. Neither contains the October VPS commits. `ops/vps-production-rebuildability-20261010` is on origin. `a3aa50a7b7abe9e827b121661d1c37441e5e80a1` is the earlier rebuild snapshot. The current tip is `68ef0465fc63b15faf4205f998921dc3970d617b`, still the uploader line plus `deployment/vps-production/`, not a union of the running trees. The future combination is in `C:\HC\deployment\GIT_CONSOLIDATION_PLAN.md`. It has not been started. `production/vps-baseline` remains a later branch and was not created.
 
-Lane C rechecked this map on 2026-10-10. This lane did not modify `C:\HC\apps`, did not commit, and did not merge.
+Lane C rechecked this map on 2026-10-10 and did not modify `C:\HC\apps`. The afternoon closeout below is the later TCP reading. Where it conflicts with the Lane C TCP paragraphs, use the closeout.
 
 ## Uploader
 
@@ -39,31 +39,39 @@ Runtime config: NSSM environment for `HC-Uploader-Public`. On-disk copy: `C:\HC\
 | --- | --- |
 | Runtime | `C:\HC\apps\tcp\tcp_ts_v2.py` |
 | Service | `HC-TCP-Public` on `127.0.0.1:8302` |
-| Branch | `feature/tcp-benchmark-refresh-comparison-chart` |
-| Origin commit | `815b1d8d607b1dc73fc86d852d64902b2e24acda` |
-| Local commit | `ee48aef6c5f83a81a96c0cc0773af69ccf991e11` |
-| Remote | `origin/feature/tcp-benchmark-refresh-comparison-chart` is still `815b1d8` |
-| Whole directory matches one commit | NO |
+| Preserve branch | `preserve/vps-tcp-production-20261010` |
+| Preserve commit | `16c85b09cc4485c804eae69f5d5ddf89fcb3cfe0` |
+| Parent | `ee48aef6c5f83a81a96c0cc0773af69ccf991e11` |
+| Pushed | YES, `origin/preserve/vps-tcp-production-20261010` |
+| Merged | NO |
+| Feature tip | `origin/feature/tcp-benchmark-refresh-comparison-chart` is `b57fe5e4a39ccf4c972cb1d59e8d5b6dff11f353` |
+| Whole live directory matches `16c85b09` | NO |
 
-`ee48aef` is a single-parent child of `815b1d8`, committed 2026-10-10 13:44:01 -0400. The subject says `Merge BTC/ETH overlays into the TCP NAV chart instead of a separate comparison chart`. It has one parent. It is not on origin.
+`16c85b09` is a single-parent child of `ee48aef`. Subject: `Preserve deployed TCP production UI and dashboard changes`. It is the evidence-hash layout hotfix only, and it is not the later percent-axis commit `9c42e670b045465f5bf248a3292100e82342aa50`. The preserve commit changes three files and does not change `tcp_ts_v2.py`:
 
-These deployed files match `ee48aef` (`git hash-object` equals the blob):
+- `tcp_dashboard.py`: NAV chart bottom margin 36 to 52. Blob `dce3dd4c0b95516ffcfc86f3f88ec4c26b4cf593`. Raw SHA-256 `484cf5262a726e965906802de0a499f02bc90859e2de55420a47981653c77e1c`.
+- `tcp_public_sections.py`: footnote and chart class changes. Blob `6c0a669df3722845750d8ef3786c8336f9959890`. Raw SHA-256 `ca097e65db4f786c096805383536413b3d29787b67a4bef58c67cc7bc01da03e`.
+- `assets/styles.css`: plot clipping. Blob `f89b16f2540c7ae28cb894fda7dd61a5ac0d4b47`. Raw SHA-256 `edf1ec68db25ecb07389ea9c2decc3331574b8461ea6097ed9578d49c59a08ac`.
 
-- `tcp_ts_v2.py`, blob `ebb0e6763f18aef131eb1edc801e8ca015283463`, SHA-256 `630F29834DFDD4DBC9005D8DF6DFD5728214F1F25FBA150C8E3607AC40D36799`. The `815b1d8` blob is still `5fa6f6752693e73d995f6de0bd19018da3b4952f`.
-- `tcp_comparison.py`
-- `tcp_nav_overlays.py` (this file is added in `ee48aef`)
-- `tcp_benchmarks.py` (same blob as `815b1d8`)
+`ee48aef` remains the overlay parent (single parent `815b1d8`, subject `Merge BTC/ETH overlays into the TCP NAV chart instead of a separate comparison chart`). `tcp_ts_v2.py` at `16c85b09` is still blob `ebb0e6763f18aef131eb1edc801e8ca015283463`, raw SHA-256 `0f3db05c36c6351b1f48849ce34a858979ade73f8f11d280bf4f64154b1d6718`.
 
-These deployed files are not blobs in this clone. `git diff --no-index` against `ee48aef` shows layout edits. The TCP worktree has a different uncommitted copy of each one.
+Re-hashed during this closeout, these four live files differ from `16c85b09` on raw bytes and after LF normalization. They were not copied into Git here, and `C:\HC\apps` was not modified.
 
-- `tcp_dashboard.py` changes the NAV chart bottom margin from 36 to 52. Hash `dce3dd4c0b95516ffcfc86f3f88ec4c26b4cf593`. Write time 13:54:18.
-- `tcp_public_sections.py` changes the footnote margin, drops the chart `maxHeight`, and adds classes `tcp-nav-chart-plot-wrap` and `tcp-overlay-note`. Hash `6c0a669df3722845750d8ef3786c8336f9959890`. Write time 13:54:17. The account-stat tuple remains `$50,000`.
-- `assets\styles.css` adds NAV-chart wrap, z-index, and height rules. Hash `f89b16f2540c7ae28cb894fda7dd61a5ac0d4b47`. Write time 13:54:21. It has no `#NAV-graph .gtitle` rules.
+| Live file | Raw SHA-256 | Length | Versus `16c85b09` | Versus `b57fe5e` |
+| --- | --- | --- | --- | --- |
+| `assets\styles.css` | `94558e377ec026067b3854e5322124ed4115d12dc4825d8af065f2ef17a8551c` | 21359 | differs | LF match, raw CRLF differs |
+| `tcp_dashboard.py` | `cf3d8d59df23a3f70f0a2604e706f16405f1a0b5a9a6827b5a458c5673a4211e` | 27235 | differs | LF match, raw CRLF differs |
+| `tcp_public_sections.py` | `a2f109da78f8c01683c12061b3ecf298709553232b5e9b6cf303b1ece076d206` | 39542 | differs | LF match, raw CRLF differs |
+| `tcp_ts_v2.py` | `2b7b0555589e3ce4ea10a795c955f50f070a0425c91154f1554b98a69b46ba62` | 66835 | differs | LF match, raw CRLF differs |
 
-The NSSM process for `C:\HC\apps\tcp\tcp_ts_v2.py` was created at 13:54:26 and was still the listener on `127.0.0.1:8302` at this recheck. This lane did not start it. A separate interpreter started at 13:33:26 listens on `127.0.0.1:8312` and is not `HC-TCP-Public`. This lane left it running.
+`b57fe5e` (2026-10-10 14:48:27 -0400, subject `Fix TCP NAV chart section layout and responsive spacing`, parent `e30bcc101d54bed9a80a2ec9c630f9886a4219a6`) is the feature-branch tip and is on origin. It contains `9c42e67`. It does not contain `16c85b09`. This closeout did not create or push it. `tcp_benchmarks.py`, `tcp_comparison.py`, and `tcp_nav_overlays.py` match both `16c85b09` and `b57fe5e` after LF normalization. Their deployed copies are CRLF.
+
+The afternoon TCP recycles were explicit `Restart-Service -Name HC-TCP-Public -Force` from Cursor agent PowerShell, not crashes. Windows recovery did not fire. The Flask reloader did not fire. NSSM kill exit code was 0. Evidence is `C:\HC\deployment\TCP_RECYCLE_INVESTIGATION.md`. Recycle 1 was 2026-10-10 13:13:15.762, running again 13:13:27, service pid 4088 then 5972. Recycle 2 was 13:44:30.282, running again 13:44:43, new pid 5756. The same pattern continued through 14:37:19. At this closeout the service was still Running, NSSM pid 9428 since 14:37:20, listener pid 12008 on `127.0.0.1:8302`. No further recycle after 14:37:20. This closeout did not restart it.
+
+A separate `python tcp_ts_v2.py` listens on `127.0.0.1:8312`. It is not `HC-TCP-Public`. The 14:09:25 process pid 11060 was gone by the end of this closeout. The listener then was pid 9292, started 14:46:27, parent 8624. This closeout did not kill it.
 
 Persistent data: `C:\HC\data\tcp\tcp_daily_returns_secret_state.json`
-Runtime config: NSSM environment. See the config-drift section. Do not rebuild the service from `C:\HC\config\tcp.env` alone.
+Runtime config: NSSM environment. See the config section. Live `tcp.env` has ingest enabled and does not set `TCP_V2_SKIP_BENCHMARK_FETCH`.
 
 ## TKP
 
@@ -144,15 +152,14 @@ Runtime config: NSSM environment (`HC_AGM_*`, ingest enabled). On-disk non-secre
 
 ## Same-named copies
 
-One repo path is deployed as more than one blob. Hashes were compared with `git hash-object` against `ee9fcfd`, `815b1d8`, `7a935e4`, `0a157c4`, `5ca9a7c`, and local `ee48aef`.
+One repo path is deployed as more than one blob. Lane C compared hashes with `git hash-object` against `ee9fcfd`, `815b1d8`, `7a935e4`, `0a157c4`, `5ca9a7c`, and local `ee48aef`. The TCP rows below were rechecked at the afternoon closeout against `16c85b09` and `b57fe5e`.
 
 | Repo path | Deployed copy | Matches |
 | --- | --- | --- |
 | `tearsheet_paths.py` | `C:\HC\apps\yq`, `C:\HC\apps\tkp`, `C:\HC\apps\agm` | `0a157c4` and `5ca9a7c` |
 | `tearsheet_paths.py` | `C:\HC\apps\shared` | `7a935e4`, `ee9fcfd`, `815b1d8` |
-| `tcp_ts_v2.py`, `tcp_comparison.py`, `tcp_nav_overlays.py` | `C:\HC\apps\tcp` | `ee48aef` only (`815b1d8` does not have this `tcp_ts_v2.py` or `tcp_nav_overlays.py`) |
-| `tcp_benchmarks.py` | `C:\HC\apps\tcp` | `815b1d8` and `ee48aef` |
-| `tcp_dashboard.py`, `tcp_public_sections.py`, `assets\styles.css` | `C:\HC\apps\tcp` | no commit; layout edits past `ee48aef` |
+| `tcp_comparison.py`, `tcp_nav_overlays.py`, `tcp_benchmarks.py` | `C:\HC\apps\tcp` | LF match of `16c85b09` and `b57fe5e`. Deployed bytes are CRLF. |
+| `tcp_ts_v2.py`, `tcp_dashboard.py`, `tcp_public_sections.py`, `assets\styles.css` | `C:\HC\apps\tcp` | Differ from `16c85b09`. LF match of origin `b57fe5e`. Raw CRLF bytes are not that blob. |
 | `tcp_ts_v2.py` and the older `tcp_*.py` helpers | `C:\HC\apps\tkp`, `C:\HC\apps\agm` | `0a157c4` and `5ca9a7c` |
 | `assets\styles.css` | `C:\HC\apps\tkp`, `C:\HC\apps\yq`, `C:\HC\apps\agm` | `0a157c4` and `5ca9a7c` |
 | `assets\styles.css` | `C:\HC\apps\shared` | `7a935e4` and `ee9fcfd` |
@@ -167,20 +174,21 @@ AGM `mp_ts.py` imports `ACCOUNT_STATS_TABLE_CLASS`, `MONTHLY_PERFORMANCE_CLASS`,
 
 Authoritative runtime source for every service is the NSSM `AppEnvironmentExtra` block, not `C:\HC\config\*.env`. The process reads the environment it was started with.
 
-`C:\HC\config\tcp.env` says it is the source of record and contains `GLENN_UPLOADER_INGEST_ENABLED=false`. It has no ingest token. It also sets `TCP_V2_SKIP_BENCHMARK_FETCH=1`.
+`C:\HC\config\tcp.env` sets `GLENN_UPLOADER_INGEST_ENABLED=true`. It does not set `TCP_V2_SKIP_BENCHMARK_FETCH`. It has no ingest token.
 
-The running `HC-TCP-Public` environment has ingest enabled. The ingest token, admin token, and session secret are loaded there. `PYTHONPATH` is `C:\HC\apps\shared;C:\HC\apps\tcp`. `TCP_V2_SKIP_BENCHMARK_FETCH` is not set on the service. `C:\HC\secrets\tcp.env` contains the admin token and session secret key names only; it does not contain the Glenn ingest token.
+The running `HC-TCP-Public` environment matches those flags. Ingest is enabled. `PYTHONPATH` is `C:\HC\apps\shared;C:\HC\apps\tcp`. `TCP_V2_SKIP_BENCHMARK_FETCH` is not set on the service. The ingest token, admin token, and session secret are loaded there. Their values are not recorded here. `C:\HC\secrets\tcp.env` contains the admin token and session secret key names only; it does not contain the Glenn ingest token.
 
-Future rebuild risk: injecting `tcp.env` into NSSM would turn TCP ingest off and would not restore the ingest token. A later fix should refresh `tcp.env` to the live non-secret flags, keep secrets out of that file, and record that the ingest token has to be supplied from the service secret store. Do not change the live service or the env file until that is done on purpose.
+An older copy of this paragraph said `tcp.env` had ingest disabled and `TCP_V2_SKIP_BENCHMARK_FETCH=1`. That is not the live file. Do not rebuild TCP from that older description.
 
 The 12:19 automatic backup's `redacted-runtime-env.json` marks secret keys as not loaded. That flag is wrong: a PowerShell `$Matches` overwrite cleared the value before the loaded check. The backup script now saves the value before that test. The tokens themselves were never written into the backup.
 
 ## Worktrees left in place
 
-- `C:\HC\deployment\source\Tearsheet-Generator` on `feature/uploader-chart-benchmark-refresh` at `ee9fcfd`. Clean. This lane did not check out another branch.
-- `C:\HC\deployment\worktrees\tcp-benchmark-refresh-comparison-chart` on local `ee48aef`, with uncommitted edits and untracked `_preview_verify` PNGs. `_preflight_caches` is gone and was not recreated.
+- `C:\HC\deployment\source\Tearsheet-Generator` on `feature/uploader-chart-benchmark-refresh` at `ee9fcfd`. This closeout did not check out another branch.
+- `C:\HC\deployment\worktrees\tcp-benchmark-refresh-comparison-chart` on `feature/tcp-benchmark-refresh-comparison-chart` at `b57fe5e`. Untracked `_preview_verify` remains. `_preflight_caches` is gone and was not recreated.
+- `C:\HC\deployment\worktrees\preserve-vps-tcp-production-20261010` on `preserve/vps-tcp-production-20261010` at `16c85b09`. Pushed. Not merged.
 - `C:\HC\deployment\worktrees\preserve-vps-agm-production-20261010` on `5ca9a7c`
 - `C:\HC\deployment\_pr65-deploy` detached at `0a157c4`
-- `C:\HC\deployment\worktrees\ops-vps-production-rebuildability-20261010` on `a3aa50a`
+- `C:\HC\deployment\worktrees\ops-vps-production-rebuildability-20261010` on `ops/vps-production-rebuildability-20261010` at `68ef046`
 
-This lane did not merge, commit, push, or delete a worktree.
+`production/vps-baseline` was not created. This closeout did not merge, did not restart a service, and did not modify `C:\HC\apps`.
