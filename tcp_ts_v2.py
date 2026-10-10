@@ -94,8 +94,6 @@ from tcp_dashboard import (
     build_tcp_nav_chart_figure,
     build_tcp_current_data_labels,
     patch_nav_chart_overlay_visibility,
-    patch_nav_chart_pct_axis,
-    patch_nav_chart_pct_axis_from_relayout,
     propagate_tcp_dashboard,
 )
 from tcp_ledger import TCPLedgerError
@@ -1038,54 +1036,174 @@ def _register_dashboard_callback(app: dash.Dash, runtime_holder: Dict[str, Any])
         Input(TCP_OVERLAY_BTC_ID, "value"),
         Input(TCP_OVERLAY_ETH_ID, "value"),
         State("nav-preview-graph", "figure"),
+        State(TCP_NAV_PCT_AXIS_ID, "value"),
         prevent_initial_call=True,
     )
-    def _toggle_nav_overlays(btc_overlay, eth_overlay, figure):
+    def _toggle_nav_overlays(btc_overlay, eth_overlay, figure, pct_axis):
         if not figure:
             raise PreventUpdate
         show_btc = _overlay_checklist_enabled(btc_overlay, "btc")
         show_eth = _overlay_checklist_enabled(eth_overlay, "eth")
+        show_pct = _overlay_checklist_enabled(pct_axis, "pct")
         return patch_nav_chart_overlay_visibility(
             figure,
             show_btc=show_btc,
             show_eth=show_eth,
+            show_pct_axis=show_pct,
         )
 
-    @app.callback(
+    app.clientside_callback(
+        """
+        function(pctAxis, figure) {
+            if (!figure || !figure.layout || !figure.layout.yaxis) {
+                return window.dash_clientside.no_update;
+            }
+            function pctTicks(yr) {
+                const baseline = 50000;
+                const p0 = (yr[0] / baseline - 1) * 100;
+                const p1 = (yr[1] / baseline - 1) * 100;
+                const span = Math.abs(p1 - p0);
+                let step = 1;
+                if (span > 50) step = 10;
+                else if (span > 20) step = 5;
+                else if (span > 10) step = 2;
+                const tickStart = Math.floor(p0 / step - 1) * step;
+                const tickEnd = Math.ceil(p1 / step + 2) * step;
+                const tickvals = [];
+                const ticktext = [];
+                for (let pct = tickStart; pct <= tickEnd; pct += step) {
+                    tickvals.push(baseline * (1 + pct / 100));
+                    ticktext.push(pct.toFixed(0) + "%");
+                }
+                return {tickvals, ticktext, range: [yr[0], yr[1]]};
+            }
+            const show = Array.isArray(pctAxis) && pctAxis.indexOf("pct") !== -1;
+            const updated = JSON.parse(JSON.stringify(figure));
+            const plot = document.querySelector("#nav-preview-graph .js-plotly-plot");
+            const margin = Object.assign(
+                {l: 48, r: 12, t: 56, b: 52},
+                updated.layout.margin || {}
+            );
+            const yr =
+                updated.layout.yaxis.range ||
+                (plot && plot._fullLayout && plot._fullLayout.yaxis
+                    ? plot._fullLayout.yaxis.range
+                    : null);
+            if (show && yr && yr.length === 2) {
+                margin.r = 72;
+                const ticks = pctTicks(yr);
+                updated.layout.yaxis2 = Object.assign({}, updated.layout.yaxis2 || {}, {
+                    title: {text: "Return since inception (%)"},
+                    overlaying: "y",
+                    side: "right",
+                    visible: true,
+                    showticklabels: true,
+                    showline: true,
+                    ticklen: 4,
+                    showgrid: false,
+                    zeroline: false,
+                    automargin: true,
+                    fixedrange: true,
+                    tickmode: "array",
+                    tickvals: ticks.tickvals,
+                    ticktext: ticks.ticktext,
+                    range: ticks.range,
+                });
+            } else {
+                margin.r = 12;
+                updated.layout.yaxis2 = Object.assign({}, updated.layout.yaxis2 || {}, {
+                    overlaying: "y",
+                    side: "right",
+                    visible: true,
+                    showticklabels: false,
+                    showline: false,
+                    ticklen: 0,
+                    title: {text: ""},
+                });
+            }
+            updated.layout.margin = margin;
+            return updated;
+        }
+        """,
         Output("nav-preview-graph", "figure", allow_duplicate=True),
         Input(TCP_NAV_PCT_AXIS_ID, "value"),
         State("nav-preview-graph", "figure"),
-        State(TCP_OVERLAY_BTC_ID, "value"),
-        State(TCP_OVERLAY_ETH_ID, "value"),
         prevent_initial_call=True,
     )
-    def _toggle_nav_pct_axis(pct_axis, figure, btc_overlay, eth_overlay):
-        if not figure:
-            raise PreventUpdate
-        show_pct = _overlay_checklist_enabled(pct_axis, "pct")
-        show_btc = _overlay_checklist_enabled(btc_overlay, "btc")
-        show_eth = _overlay_checklist_enabled(eth_overlay, "eth")
-        return patch_nav_chart_pct_axis(
-            figure,
-            show_pct_axis=show_pct,
-            show_btc=show_btc,
-            show_eth=show_eth,
-        )
 
-    @app.callback(
+    app.clientside_callback(
+        """
+        function(relayoutData, figure, pctAxis) {
+            if (
+                !figure ||
+                !figure.layout ||
+                !figure.layout.yaxis ||
+                !Array.isArray(pctAxis) ||
+                pctAxis.indexOf("pct") === -1 ||
+                !relayoutData
+            ) {
+                return window.dash_clientside.no_update;
+            }
+            let y0;
+            let y1;
+            if (relayoutData["yaxis.range"]) {
+                y0 = relayoutData["yaxis.range"][0];
+                y1 = relayoutData["yaxis.range"][1];
+            } else if (
+                relayoutData["yaxis.range[0]"] !== undefined &&
+                relayoutData["yaxis.range[1]"] !== undefined
+            ) {
+                y0 = relayoutData["yaxis.range[0]"];
+                y1 = relayoutData["yaxis.range[1]"];
+            } else {
+                return window.dash_clientside.no_update;
+            }
+            const baseline = 50000;
+            const p0 = (y0 / baseline - 1) * 100;
+            const p1 = (y1 / baseline - 1) * 100;
+            const span = Math.abs(p1 - p0);
+            let step = 1;
+            if (span > 50) step = 10;
+            else if (span > 20) step = 5;
+            else if (span > 10) step = 2;
+            const tickStart = Math.floor(p0 / step - 1) * step;
+            const tickEnd = Math.ceil(p1 / step + 2) * step;
+            const tickvals = [];
+            const ticktext = [];
+            for (let pct = tickStart; pct <= tickEnd; pct += step) {
+                tickvals.push(baseline * (1 + pct / 100));
+                ticktext.push(pct.toFixed(0) + "%");
+            }
+            const updated = JSON.parse(JSON.stringify(figure));
+            updated.layout.yaxis2 = Object.assign({}, updated.layout.yaxis2 || {}, {
+                title: {text: "Return since inception (%)"},
+                overlaying: "y",
+                side: "right",
+                visible: true,
+                showticklabels: true,
+                showline: true,
+                showgrid: false,
+                zeroline: false,
+                automargin: true,
+                fixedrange: true,
+                tickmode: "array",
+                tickvals: tickvals,
+                ticktext: ticktext,
+                range: [y0, y1],
+            });
+            updated.layout.margin = Object.assign(
+                {l: 48, r: 72, t: 56, b: 52},
+                updated.layout.margin || {}
+            );
+            return updated;
+        }
+        """,
         Output("nav-preview-graph", "figure", allow_duplicate=True),
         Input("nav-preview-graph", "relayoutData"),
         State("nav-preview-graph", "figure"),
         State(TCP_NAV_PCT_AXIS_ID, "value"),
         prevent_initial_call=True,
     )
-    def _sync_nav_pct_axis_on_relayout(relayout_data, figure, pct_axis):
-        if not _overlay_checklist_enabled(pct_axis, "pct"):
-            raise PreventUpdate
-        patched = patch_nav_chart_pct_axis_from_relayout(figure, relayout_data or {})
-        if patched is None:
-            raise PreventUpdate
-        return patched
 
 
 def _register_admin_callbacks(

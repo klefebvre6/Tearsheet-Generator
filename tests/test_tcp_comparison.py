@@ -121,19 +121,22 @@ def test_pct_axis_hidden_by_default():
     fig = build_tcp_nav_chart_figure(bundle)
     assert fig.layout.yaxis.title.text == "Value ($)"
     yaxis2 = fig.layout.yaxis2
-    assert yaxis2 is None or yaxis2.visible is False
+    assert yaxis2 is not None
+    assert not yaxis2.showticklabels
 
 
 def test_pct_axis_visible_when_enabled():
     records = [{"Date": "2026-01-20", "NAV": 50000.0}, {"Date": "2026-01-21", "NAV": 51000.0}]
     bundle = build_nav_overlay_bundle(records, None, None)
     fig = build_tcp_nav_chart_figure(bundle, show_pct_axis=True)
-    assert fig.layout.yaxis2.visible is True
+    assert fig.layout.yaxis2.showticklabels is True
     assert NAV_PCT_AXIS_TITLE in (fig.layout.yaxis2.title.text or "")
-    assert fig.layout.yaxis2.range == pytest.approx(
-        dollar_range_to_pct_range(fig.layout.yaxis.range),
-        rel=1e-6,
-    )
+    assert fig.layout.yaxis2.range == pytest.approx(fig.layout.yaxis.range, rel=1e-6)
+    tickvals = list(fig.layout.yaxis2.tickvals or ())
+    ticktext = list(fig.layout.yaxis2.ticktext or ())
+    baseline = nav_pct_axis_baseline()
+    idx = min(range(len(tickvals)), key=lambda i: abs(tickvals[i] - baseline))
+    assert ticktext[idx] == "0%"
 
 
 def test_pct_axis_toggle_does_not_change_tcp_trace_values():

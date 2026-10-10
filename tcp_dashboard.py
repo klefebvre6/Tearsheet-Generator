@@ -334,26 +334,56 @@ def dollar_range_to_pct_range(
     ]
 
 
+def nav_pct_axis_ticks(
+    dollar_range: Sequence[float],
+    baseline: Optional[float] = None,
+) -> tuple[List[float], List[str]]:
+    """Dollar tick positions with percent labels (shared y scale)."""
+    base = float(baseline if baseline is not None else nav_pct_axis_baseline())
+    pct_min = dollar_value_to_pct_return(dollar_range[0], base)
+    pct_max = dollar_value_to_pct_return(dollar_range[1], base)
+    span = abs(pct_max - pct_min)
+    if span > 50:
+        step = 10
+    elif span > 20:
+        step = 5
+    elif span > 10:
+        step = 2
+    else:
+        step = 1
+    tick_start = int(pct_min / step - 1) * step
+    tick_end = int(pct_max / step + 2) * step
+    pct_ticks = list(range(tick_start, tick_end + step, step))
+    tickvals = [base * (1.0 + pct / 100.0) for pct in pct_ticks]
+    ticktext = [f"{pct:.0f}%" for pct in pct_ticks]
+    return tickvals, ticktext
+
+
 def build_nav_pct_yaxis2(
     dollar_range: Optional[Sequence[float]],
     *,
     visible: bool,
 ) -> Dict[str, Any]:
-    if not visible:
-        return {"overlaying": "y", "side": "right", "visible": False}
+    """Secondary axis shares the dollar scale; tick text shows return since inception."""
     layout: Dict[str, Any] = {
-        "title": {"text": NAV_PCT_AXIS_TITLE},
         "overlaying": "y",
         "side": "right",
         "showgrid": False,
         "zeroline": False,
         "visible": True,
-        "ticksuffix": "%",
         "automargin": True,
         "fixedrange": True,
+        "showticklabels": visible,
+        "showline": visible,
+        "ticklen": 0 if not visible else 4,
+        "title": {"text": NAV_PCT_AXIS_TITLE if visible else ""},
     }
     if dollar_range is not None and len(dollar_range) == 2:
-        layout["range"] = dollar_range_to_pct_range(dollar_range)
+        tickvals, ticktext = nav_pct_axis_ticks(dollar_range)
+        layout["tickmode"] = "array"
+        layout["tickvals"] = tickvals
+        layout["ticktext"] = ticktext
+        layout["range"] = [float(dollar_range[0]), float(dollar_range[1])]
     return layout
 
 
@@ -365,7 +395,11 @@ def _figure_as_dict(figure: Any) -> Mapping[str, Any]:
 
 def _figure_shows_pct_axis(figure: Mapping[str, Any]) -> bool:
     yaxis2 = figure.get("layout", {}).get("yaxis2") or {}
-    return bool(yaxis2.get("visible"))
+    if not yaxis2:
+        return False
+    title = yaxis2.get("title") or {}
+    title_text = title.get("text") if isinstance(title, dict) else title
+    return bool(yaxis2.get("showticklabels")) or title_text == NAV_PCT_AXIS_TITLE
 
 
 def _return_since_baseline(values: Sequence[float], baseline: float) -> List[float]:
@@ -571,6 +605,7 @@ def patch_nav_chart_overlay_visibility(
     *,
     show_btc: bool,
     show_eth: bool,
+    show_pct_axis: bool = False,
 ) -> Dict[str, Any]:
     """Toggle overlay traces without rebuilding the figure (preserves zoom)."""
     from dash import Patch
@@ -589,8 +624,9 @@ def patch_nav_chart_overlay_visibility(
     y_range = _visible_y_range(tcp_y, btc_y, eth_y, show_btc=show_btc, show_eth=show_eth)
     if y_range is not None:
         patched["layout"]["yaxis"]["range"] = y_range
-        if _figure_shows_pct_axis(figure):
+        if show_pct_axis or _figure_shows_pct_axis(figure):
             patched["layout"]["yaxis2"] = build_nav_pct_yaxis2(y_range, visible=True)
+            patched["layout"]["margin"] = dict(NAV_CHART_MARGIN_WITH_PCT_AXIS)
     patched["layout"]["uirevision"] = figure.get("layout", {}).get("uirevision", NAV_CHART_UIREVISION)
     return patched
 
