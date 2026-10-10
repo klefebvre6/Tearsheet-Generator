@@ -1040,6 +1040,37 @@ body,
 }
 
 @media (max-width: 768px) {
+  #monthly-calendar-container {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .tcp-monthly-performance-wrapper {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: auto;
+  }
+
+  .tcp-monthly-performance-wrapper > .tcp-monthly-performance {
+    width: max-content;
+    min-width: 56rem;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .tcp-monthly-performance-wrapper .tcp-monthly-performance th,
+  .tcp-monthly-performance-wrapper .tcp-monthly-performance td {
+    white-space: nowrap;
+  }
+
   #page-container {
     width: 100%;
     padding: calc(var(--spacing-unit) * 0.75);
