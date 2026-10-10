@@ -111,8 +111,42 @@ export function filterWarningsForMode(
 export function isRoutinePriorCloseWarning(message: string): boolean {
   return (
     /used prior close from/i.test(message) ||
-    /rebased from .* instead/i.test(message)
+    /rebased from .* instead/i.test(message) ||
+    /no close within \d+d before/i.test(message)
   )
+}
+
+const BENCHMARK_OR_PROGRAM_PREFIX = /^(SPX|NDX|BTC|TKP|TCP|AGM|YQ)\b/
+
+/** At most one visible warning per program/benchmark prefix. */
+export function capVisibleWarnings(visible: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const warning of visible) {
+    const match = warning.match(BENCHMARK_OR_PROGRAM_PREFIX)
+    const key = match ? match[1] : warning
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(warning)
+  }
+  return out
+}
+
+export interface BenchmarkStatusSummary {
+  status: string
+  latest_date: string | null
+  aligned_points?: number
+  fallback_points?: number
+}
+
+export function summarizeBenchmarkDetails(
+  status: Record<string, BenchmarkStatusSummary> | undefined,
+): string[] {
+  if (!status) return []
+  return Object.entries(status).map(([symbol, info]) => {
+    const through = info.latest_date ? info.latest_date : 'none'
+    return `${symbol}: ${info.status} · through ${through}`
+  })
 }
 
 export interface PartitionedChartWarnings {
@@ -133,5 +167,5 @@ export function partitionChartWarnings(
     if (isRoutinePriorCloseWarning(w)) diagnostic.push(w)
     else visible.push(w)
   }
-  return { visible, diagnostic }
+  return { visible: capVisibleWarnings(visible), diagnostic }
 }

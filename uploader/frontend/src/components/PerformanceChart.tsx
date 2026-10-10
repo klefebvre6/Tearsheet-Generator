@@ -56,7 +56,9 @@ import {
   resolveProgramChartState,
   shouldShowDots,
   sparseDataNote,
+  summarizeBenchmarkDetails,
 } from '../lib/chartState'
+import { toggleSetMember, visibleProgramModeKeys } from '../lib/chartSeriesSelection'
 import {
   LEVERAGE_DEFAULT,
   LEVERAGE_MAX,
@@ -156,6 +158,10 @@ export function PerformanceChart({ refreshToken = 0 }: Props) {
   const [backendCombined, setBackendCombined] = useState<CombinedTradingDayPoint[] | null>(null)
   const [backendProgram, setBackendProgram] = useState<ProgramSeriesPoint[] | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
+  const [benchmarkStatus, setBenchmarkStatus] = useState<
+    Record<string, { status: string; latest_date: string | null }>
+  >({})
+  const [programHidden, setProgramHidden] = useState(false)
   const [leverageStrategy, setLeverageStrategy] = useState<ProductKey | ''>('')
   const [leverage, setLeverage] = useState(LEVERAGE_DEFAULT)
 
@@ -164,6 +170,7 @@ export function PerformanceChart({ refreshToken = 0 }: Props) {
     setBackendCombined(null)
     setBackendProgram(null)
     setWarnings([])
+    setBenchmarkStatus({})
     setProvenance('loading')
     setProgramDataSource(null)
 
@@ -172,7 +179,12 @@ export function PerformanceChart({ refreshToken = 0 }: Props) {
       setProvenance(resolveChartProvenance(resp, true))
       setBenchmarkSource(readBenchmarkDataSource(resp))
       setProgramDataSource(readProgramDataSource(resp))
-      if (resp) setWarnings(resp.warnings)
+      if (resp) {
+        setWarnings(resp.warnings)
+        setBenchmarkStatus(resp.benchmark_status ?? {})
+      } else {
+        setBenchmarkStatus({})
+      }
     }
 
     if (isCombined) {
@@ -195,6 +207,7 @@ export function PerformanceChart({ refreshToken = 0 }: Props) {
 
   useEffect(() => {
     setEnabledBenchmarks(defaultEnabledBenchmarks(provenance, benchmarkSource))
+    setProgramHidden(false)
   }, [provenance, benchmarkSource, mode])
 
   const mockCombinedData = useMemo(
@@ -276,10 +289,7 @@ export function PerformanceChart({ refreshToken = 0 }: Props) {
 
   const lineKeys: SeriesKey[] = isCombined
     ? legendProducts.filter((k) => !hiddenProducts.has(k))
-    : [
-        mode as ProductKey,
-        ...BENCHMARK_KEYS.filter((k) => enabledBenchmarks.has(k)),
-      ]
+    : visibleProgramModeKeys(mode as ProductKey, programHidden, enabledBenchmarks)
 
   const canDrawChart =
     displayState !== 'loading' &&
@@ -288,21 +298,11 @@ export function PerformanceChart({ refreshToken = 0 }: Props) {
     lineKeys.length > 0
 
   const toggleProduct = (key: ProductKey) => {
-    setHiddenProducts((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+    setHiddenProducts((prev) => toggleSetMember(prev, key))
   }
 
   const toggleBenchmark = (key: BenchmarkKey) => {
-    setEnabledBenchmarks((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+    setEnabledBenchmarks((prev) => toggleSetMember(prev, key))
   }
 
   const activeLabel = isCombined ? '' : SERIES_BY_KEY.get(mode as ProductKey)?.label ?? mode
@@ -454,12 +454,18 @@ export function PerformanceChart({ refreshToken = 0 }: Props) {
             })
           : (() => {
               const active = SERIES_BY_KEY.get(mode)!
+              const programOn = !programHidden
               return (
                 <>
-                  <span className={styles.activeSeriesChip}>
+                  <button
+                    type="button"
+                    className={`${styles.legendItem} ${!programOn ? styles.legendOff : ''}`}
+                    onClick={() => setProgramHidden((prev) => !prev)}
+                    aria-pressed={programOn}
+                  >
                     <span className={styles.swatch} style={{ background: active.color }} />
                     {seriesLabel(mode as ProductKey)}
-                  </span>
+                  </button>
                   {benchmarksVisible && (
                     <>
                       <span className={styles.toggleDivider} aria-hidden="true" />
@@ -493,16 +499,24 @@ export function PerformanceChart({ refreshToken = 0 }: Props) {
         <p className={styles.warningNote}>{visibleWarnings.join(' ')}</p>
       )}
 
-      {diagnosticWarnings.length > 0 && (
-        <details className={styles.diagnostics}>
-          <summary>Data details ({diagnosticWarnings.length})</summary>
-          <ul className={styles.diagnosticsList}>
-            {diagnosticWarnings.map((w) => (
-              <li key={w}>{w}</li>
-            ))}
-          </ul>
-        </details>
-      )}
+      {(() => {
+        const detailLines = summarizeBenchmarkDetails(benchmarkStatus)
+        if (detailLines.length === 0 && diagnosticWarnings.length === 0) return null
+        const lines =
+          detailLines.length > 0
+            ? detailLines
+            : diagnosticWarnings.slice(0, 6)
+        return (
+          <details className={styles.diagnostics}>
+            <summary>Data details</summary>
+            <ul className={styles.diagnosticsList}>
+              {lines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </details>
+        )
+      })()}
 
       <div
         className={styles.chartWrap}

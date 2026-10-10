@@ -131,7 +131,8 @@ def test_benchmark_missing_on_start_date_rolls_forward_with_warning(sandbox_clie
     assert spx[0]["x"] == _A_SATURDAY.isoformat()
     # Prior-weekday close vs Monday rebase anchor — not exactly 100k on a weekend start.
     assert 99000 < spx[0]["y"] < 100000
-    assert any("rebased" in w.lower() for w in body["warnings"])
+    assert body["benchmark_status"]["SPX"]["fallback_points"] >= 1
+    assert not any("no close within 5d" in w for w in body["warnings"])
 
 
 def test_unknown_benchmark_symbol_is_ignored_with_warning(sandbox_client):
@@ -243,3 +244,151 @@ def test_program_mode_without_benchmarks_has_null_benchmark_source(sandbox_clien
     _post(sandbox_client, "TCP", _A_MONDAY.isoformat(), stonex_nlv=50000)
     body = sandbox_client.get("/api/performance?mode=program&program=TCP").json()
     assert body["benchmark_data_source"] is None
+    assert body["benchmark_status"] == {}
+
+
+def _client_with_calendar_cache(start, end, holiday=None):
+    from tests.benchmark_fixtures import seed_equity_and_btc_calendar
+
+    cache = Path(__file__).resolve().parent / "_tmp" / f"cal_{uuid4().hex}"
+    cache.mkdir(parents=True, exist_ok=True)
+    seed_equity_and_btc_calendar(cache, start, end, holiday=holiday)
+    return _make_client(
+        seed_benchmarks=False,
+        benchmark_cache_dir=str(cache),
+        benchmark_cache_only=True,
+    )
+
+
+def _post_program_span(client, program, start, days, field, start_nlv):
+    dates = []
+    for i in range(days):
+        d = (start + timedelta(days=i)).isoformat()
+        dates.append(d)
+        if program == "AGM":
+            _post(client, program, d, tradestation_nlv=start_nlv + i * 100, fee=0)
+        elif program == "TKP":
+            _post(client, program, d, stonex_nlv=start_nlv + i * 100, plus500_nlv=0)
+        else:
+            _post(client, program, d, **{field: start_nlv + i * 100})
+    return dates
+
+
+def test_current_benchmarks_extend_through_final_program_date():
+    start = _A_MONDAY
+    end = start + timedelta(days=10)  # includes a weekend
+    client = _client_with_calendar_cache(start - timedelta(days=3), end)
+    try:
+        dates = _post_program_span(client, "TCP", start, 11, "stonex_nlv", 50000)
+        body = client.get(
+            "/api/performance?mode=program&program=TCP&benchmarks=SPX,NDX,BTC"
+        ).json()
+        last = dates[-1]
+        assert body["points"]["TCP"][-1]["x"] == last
+        for sym in ("SPX", "NDX", "BTC"):
+            assert body["points"][sym][-1]["x"] == last
+            assert body["benchmark_status"][sym]["status"] == "ready"
+            assert body["benchmark_status"][sym]["aligned_points"] == len(dates)
+        assert len(body["warnings"]) <= 3
+        assert not any("no close within 5d" in w for w in body["warnings"])
+        assert not any("used prior close from" in w for w in body["warnings"])
+    finally:
+        client.close()
+
+
+def test_benchmarks_extend_for_tkp_and_agm():
+    start = _A_MONDAY
+    end = start + timedelta(days=6)
+    client = _client_with_calendar_cache(start - timedelta(days=2), end)
+    try:
+        for program, field, nlv in (
+            ("TKP", "stonex_nlv", 100000),
+            ("AGM", "tradestation_nlv", 30000),
+        ):
+            dates = _post_program_span(client, program, start, 7, field, nlv)
+            body = client.get(
+                f"/api/performance?mode=program&program={program}&benchmarks=SPX,NDX,BTC"
+            ).json()
+            last = dates[-1]
+            assert body["points"][program][-1]["x"] == last
+            for sym in ("SPX", "NDX", "BTC"):
+                assert body["points"][sym][-1]["x"] == last
+    finally:
+        client.close()
+
+
+def test_market_holiday_uses_bounded_prior_close():
+    start = _A_MONDAY
+    holiday = start + timedelta(days=2)  # Wednesday
+    end = start + timedelta(days=4)
+    client = _client_with_calendar_cache(start - timedelta(days=2), end, holiday=holiday)
+    try:
+        dates = _post_program_span(client, "TCP", start, 5, "stonex_nlv", 50000)
+        body = client.get(
+            "/api/performance?mode=program&program=TCP&benchmarks=SPX"
+        ).json()
+        holiday_iso = holiday.isoformat()
+        assert holiday_iso in dates
+        xs = [p["x"] for p in body["points"]["SPX"]]
+        assert holiday_iso in xs
+        assert body["benchmark_status"]["SPX"]["fallback_points"] >= 1
+        assert body["points"]["SPX"][-1]["x"] == dates[-1]
+        assert not any("no close within 5d" in w for w in body["warnings"])
+    finally:
+        client.close()
+
+
+def test_btc_weekend_aligns_to_same_calendar_date():
+    start = _A_SATURDAY
+    end = start + timedelta(days=2)
+    client = _client_with_calendar_cache(start - timedelta(days=2), end)
+    try:
+        _post(client, "TCP", start.isoformat(), stonex_nlv=50000)
+        _post(client, "TCP", (start + timedelta(days=1)).isoformat(), stonex_nlv=50100)
+        _post(client, "TCP", end.isoformat(), stonex_nlv=50200)
+        body = client.get(
+            "/api/performance?mode=program&program=TCP&benchmarks=BTC"
+        ).json()
+        btc_xs = [p["x"] for p in body["points"]["BTC"]]
+        assert start.isoformat() in btc_xs
+        assert body["points"]["BTC"][-1]["x"] == end.isoformat()
+    finally:
+        client.close()
+
+
+def test_stale_cache_emits_one_warning_not_a_wall():
+    start = _A_MONDAY
+    cache_end = start + timedelta(days=2)
+    program_end = start + timedelta(days=20)
+    client = _client_with_calendar_cache(start - timedelta(days=2), cache_end)
+    try:
+        _post_program_span(client, "TCP", start, 21, "stonex_nlv", 50000)
+        before_rows = client.get("/api/rows/TCP?limit=365").json()["count"]
+        body = client.get(
+            "/api/performance?mode=program&program=TCP&benchmarks=SPX,NDX,BTC"
+        ).json()
+        after_rows = client.get("/api/rows/TCP?limit=365").json()["count"]
+        assert before_rows == after_rows == 21
+        stale_warnings = [w for w in body["warnings"] if "stale" in w.lower()]
+        assert 1 <= len(stale_warnings) <= 3
+        assert len(body["warnings"]) <= 3
+        assert not any("no close within 5d" in w for w in body["warnings"])
+        for sym in ("SPX", "NDX", "BTC"):
+            assert body["benchmark_status"][sym]["status"] == "stale"
+            assert body["points"][sym][-1]["x"] != program_end.isoformat()
+    finally:
+        client.close()
+
+
+def test_performance_get_does_not_export_or_mutate_rows(sandbox_client):
+    _post(sandbox_client, "TCP", _A_MONDAY.isoformat(), stonex_nlv=50000)
+    _post(sandbox_client, "TCP", (_A_MONDAY + timedelta(days=1)).isoformat(), stonex_nlv=51000)
+    eligibility_before = sandbox_client.get("/api/export/eligibility").json()
+    rows_before = sandbox_client.get("/api/rows/TCP?limit=365").json()["count"]
+    sandbox_client.get("/api/performance?mode=program&program=TCP&benchmarks=SPX,NDX,BTC")
+    sandbox_client.get("/api/performance?mode=combined")
+    eligibility_after = sandbox_client.get("/api/export/eligibility").json()
+    rows_after = sandbox_client.get("/api/rows/TCP?limit=365").json()["count"]
+    assert rows_before == rows_after
+    assert eligibility_before["exported"] == eligibility_after["exported"]
+    assert eligibility_before["excluded"] == eligibility_after["excluded"]

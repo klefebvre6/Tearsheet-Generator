@@ -38,6 +38,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from typing import Optional
 
+from .benchmark_store import MAX_PRIOR_CLOSE_GAP_DAYS
 from .benchmarks import (
     BENCHMARK_ALIGN_POLICY,
     BENCHMARK_SYMBOLS,
@@ -115,6 +116,25 @@ def _empty_program_series(code: str) -> tuple[list[dict], dict[str, list]]:
     return series, {code: []}
 
 
+def _human_date(d: date) -> str:
+    return f"{d.strftime('%B')} {d.day}, {d.year}"
+
+
+def _benchmark_status_entry(
+    *,
+    status: str,
+    latest_date: Optional[str],
+    aligned_points: int,
+    fallback_points: int,
+) -> dict:
+    return {
+        "status": status,
+        "latest_date": latest_date,
+        "aligned_points": aligned_points,
+        "fallback_points": fallback_points,
+    }
+
+
 def build_combined(db) -> dict:
     """Combined mode: one program-only series per program, trading-day index."""
     warnings: list[str] = []
@@ -158,6 +178,7 @@ def build_combined(db) -> dict:
         "program_data_source": _aggregate_program_source(any_backfill),
         "benchmark_data_source": None,
         "benchmark_align_policy": None,
+        "benchmark_status": {},
     }
 
 
@@ -183,6 +204,7 @@ def build_program(db, program: str, benchmark_symbols: list[str]) -> dict:
             "program_data_source": PROGRAM_DATA_SOURCE,
             "benchmark_data_source": None,
             "benchmark_align_policy": None,
+            "benchmark_status": {},
         }
 
     values = _normalized_values(rows)
@@ -201,44 +223,86 @@ def build_program(db, program: str, benchmark_symbols: list[str]) -> dict:
     points: dict[str, list[dict]] = {code: [{"x": d, "y": v} for d, v in zip(dates, values)]}
 
     resolved_benchmarks: list[str] = []
+    benchmark_status: dict[str, dict] = {}
     benchmark_requested = bool(benchmark_symbols)
     store = get_store()
     store.reset_session()
-    seen_warnings: set[str] = set()
+    warned_symbols: set[str] = set()
 
-    def add_warning(msg: Optional[str]) -> None:
-        if msg and msg not in seen_warnings:
-            seen_warnings.add(msg)
-            warnings.append(msg)
+    def add_symbol_warning(sym: str, msg: Optional[str]) -> None:
+        if not msg or sym in warned_symbols:
+            return
+        warned_symbols.add(sym)
+        warnings.append(msg)
 
     if benchmark_symbols:
         start_date = date.fromisoformat(dates[0])
+        end_date = date.fromisoformat(dates[-1])
         for sym in benchmark_symbols:
             if sym not in BENCHMARK_SYMBOLS:
                 warnings.append(f"Unknown benchmark '{sym}' ignored.")
                 continue
 
+            store.ensure_range(sym, start_date, end_date)
+            cache_latest = store.latest_close_date(sym)
             base = store.close_on_or_after(sym, start_date)
-            add_warning(base.warning)
             if base.value is None:
-                warnings.append(
-                    f"{sym}: no benchmark data available near {dates[0]}; series omitted."
+                add_symbol_warning(
+                    sym,
+                    f"{sym} benchmark data is unavailable.",
+                )
+                benchmark_status[sym] = _benchmark_status_entry(
+                    status="unavailable",
+                    latest_date=cache_latest.isoformat() if cache_latest else None,
+                    aligned_points=0,
+                    fallback_points=0,
                 )
                 continue
 
             bench_points = []
+            fallback_points = 0
+            unaligned = 0
             for d_str in dates:
-                aligned = store.close_on_or_before(sym, date.fromisoformat(d_str))
-                add_warning(aligned.warning)
+                target = date.fromisoformat(d_str)
+                aligned = store.close_on_or_before(sym, target)
                 if aligned.value is None:
+                    unaligned += 1
                     continue
+                if aligned.as_of is not None and aligned.as_of != target:
+                    fallback_points += 1
                 bench_points.append(
                     {"x": d_str, "y": round(BASE_VALUE * aligned.value / base.value, 4)}
                 )
 
             if not bench_points:
-                warnings.append(f"{sym}: no aligned benchmark points; series omitted.")
+                add_symbol_warning(sym, f"{sym} benchmark data is unavailable.")
+                benchmark_status[sym] = _benchmark_status_entry(
+                    status="unavailable",
+                    latest_date=cache_latest.isoformat() if cache_latest else None,
+                    aligned_points=0,
+                    fallback_points=0,
+                )
                 continue
+
+            last_aligned = date.fromisoformat(bench_points[-1]["x"])
+            stale = unaligned > 0 or (
+                cache_latest is not None
+                and (end_date - cache_latest).days > MAX_PRIOR_CLOSE_GAP_DAYS
+            )
+            status = "stale" if stale else "ready"
+            if stale:
+                last_close = cache_latest or last_aligned
+                add_symbol_warning(
+                    sym,
+                    f"{sym} benchmark data is stale; last available close is "
+                    f"{_human_date(last_close)}.",
+                )
+            benchmark_status[sym] = _benchmark_status_entry(
+                status=status,
+                latest_date=(cache_latest or last_aligned).isoformat(),
+                aligned_points=len(bench_points),
+                fallback_points=fallback_points,
+            )
 
             resolved_benchmarks.append(sym)
             series_meta.append(
@@ -265,4 +329,5 @@ def build_program(db, program: str, benchmark_symbols: list[str]) -> dict:
         "benchmark_align_policy": (
             BENCHMARK_ALIGN_POLICY if resolved_benchmarks else None
         ),
+        "benchmark_status": benchmark_status,
     }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  capVisibleWarnings,
   combinedProgramsWithData,
   filterWarningsForMode,
   getCombinedDayTicks,
@@ -9,6 +10,7 @@ import {
   programNeedsMoreMessage,
   resolveCombinedChartState,
   resolveProgramChartState,
+  summarizeBenchmarkDetails,
 } from './chartState'
 import type { CombinedTradingDayPoint, ProgramSeriesPoint } from '../data/performance'
 
@@ -121,7 +123,7 @@ describe('isRoutinePriorCloseWarning', () => {
   it('does not match unavailable or mock warnings', () => {
     expect(isRoutinePriorCloseWarning('SPX: no benchmark data available.')).toBe(false)
     expect(isRoutinePriorCloseWarning('Using mock performance fallback.')).toBe(false)
-    expect(isRoutinePriorCloseWarning('SPX: no close within 5d before 2026-07-11.')).toBe(false)
+    expect(isRoutinePriorCloseWarning('SPX: no close within 5d before 2026-07-11.')).toBe(true)
   })
 })
 
@@ -156,5 +158,48 @@ describe('partitionChartWarnings', () => {
     const { visible, diagnostic } = partitionChartWarnings(warnings, 'combined')
     expect(visible).toEqual(['TCP: no aligned benchmark points.'])
     expect(diagnostic).toEqual(priorClose)
+  })
+
+  it('never surfaces a missing-date wall as visible warnings', () => {
+    const wall = Array.from({ length: 80 }, (_, i) => `SPX: no close within 5d before 2026-08-${String((i % 28) + 1).padStart(2, '0')}.`)
+    const { visible, diagnostic } = partitionChartWarnings(
+      [...wall, 'SPX benchmark data is stale; last available close is July 15, 2026.'],
+      'TCP',
+    )
+    expect(visible).toEqual([
+      'SPX benchmark data is stale; last available close is July 15, 2026.',
+    ])
+    expect(diagnostic.length).toBe(80)
+  })
+})
+
+describe('capVisibleWarnings', () => {
+  it('keeps at most one warning per benchmark', () => {
+    expect(
+      capVisibleWarnings([
+        'SPX benchmark data is stale; last available close is July 15, 2026.',
+        'SPX: no aligned benchmark points; series omitted.',
+        'NDX benchmark data is stale; last available close is July 15, 2026.',
+      ]),
+    ).toEqual([
+      'SPX benchmark data is stale; last available close is July 15, 2026.',
+      'NDX benchmark data is stale; last available close is July 15, 2026.',
+    ])
+  })
+})
+
+describe('summarizeBenchmarkDetails', () => {
+  it('renders one summary line per benchmark', () => {
+    expect(
+      summarizeBenchmarkDetails({
+        SPX: { status: 'ready', latest_date: '2026-10-08', aligned_points: 180, fallback_points: 3 },
+        NDX: { status: 'ready', latest_date: '2026-10-08', aligned_points: 180, fallback_points: 3 },
+        BTC: { status: 'ready', latest_date: '2026-10-08', aligned_points: 187, fallback_points: 0 },
+      }),
+    ).toEqual([
+      'SPX: ready · through 2026-10-08',
+      'NDX: ready · through 2026-10-08',
+      'BTC: ready · through 2026-10-08',
+    ])
   })
 })

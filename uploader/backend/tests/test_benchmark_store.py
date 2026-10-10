@@ -81,3 +81,62 @@ def test_injected_fetcher_never_uses_synthetic_values():
     store.ensure_range("SPX", date(2026, 7, 1), date(2026, 7, 10))
     val = store.close_on_or_before("SPX", date(2026, 7, 1)).value
     assert val == 1234.56
+
+
+def test_stale_cache_triggers_refresh_once_per_day():
+    cache = _tmp_cache()
+    write_daily_closes(cache, "SPX", [(date(2026, 7, 6), 5000.0)])
+    calls: list[tuple[str, date, date]] = []
+
+    def fake_fetch(ticker: str, start: date, end: date) -> dict[date, float]:
+        calls.append((ticker, start, end))
+        out = {}
+        d = start
+        while d <= end:
+            if d.weekday() < 5:
+                out[d] = 5100.0
+            d += timedelta(days=1)
+        return out
+
+    today = date(2026, 10, 8)
+    store = BenchmarkStore(
+        cache_dir=cache, fetcher=fake_fetch, today_fn=lambda: today
+    )
+    store.ensure_range("SPX", date(2026, 7, 1), today)
+    store.ensure_range("SPX", date(2026, 7, 1), today)
+    store.close_on_or_before("SPX", today)
+    assert len(calls) == 1
+    assert store.latest_close_date("SPX") == today
+    assert store.close_on_or_before("SPX", today).value == 5100.0
+
+
+def test_failed_refresh_keeps_last_known_good_cache():
+    cache = _tmp_cache()
+    write_daily_closes(cache, "NDX", [(date(2026, 7, 6), 18000.0)])
+    calls = {"n": 0}
+
+    def boom(ticker: str, start: date, end: date) -> dict[date, float]:
+        calls["n"] += 1
+        raise RuntimeError("network down")
+
+    today = date(2026, 10, 8)
+    store = BenchmarkStore(cache_dir=cache, fetcher=boom, today_fn=lambda: today)
+    store.ensure_range("NDX", date(2026, 7, 1), today)
+    store.ensure_range("NDX", date(2026, 7, 1), today)
+    assert calls["n"] == 1
+    assert store.close_on_or_before("NDX", date(2026, 7, 6)).value == 18000.0
+    assert store.latest_close_date("NDX") == date(2026, 7, 6)
+
+
+def test_empty_fetch_does_not_fabricate_prices():
+    cache = _tmp_cache()
+
+    def empty_fetch(ticker: str, start: date, end: date) -> dict[date, float]:
+        return {}
+
+    store = BenchmarkStore(
+        cache_dir=cache, fetcher=empty_fetch, today_fn=lambda: date(2026, 10, 8)
+    )
+    store.ensure_range("BTC", date(2026, 7, 1), date(2026, 10, 8))
+    assert store.close_on_or_before("BTC", date(2026, 10, 8)).value is None
+    assert store.latest_close_date("BTC") is None

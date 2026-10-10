@@ -93,6 +93,13 @@ export interface ApiPerformanceSeriesMeta {
   point_count: number
 }
 
+export interface ApiBenchmarkStatus {
+  status: 'ready' | 'stale' | 'unavailable' | string
+  latest_date: string | null
+  aligned_points: number
+  fallback_points: number
+}
+
 export interface ApiPerformanceResponse {
   mode: 'combined' | 'program'
   x_axis: 'trading_day' | 'date'
@@ -109,6 +116,8 @@ export interface ApiPerformanceResponse {
   benchmark_data_source?: string | null
   /** e.g. `prior_close_within_5_calendar_days` when benchmarks are aligned. */
   benchmark_align_policy?: string | null
+  /** Per-benchmark readiness; optional for older backends. */
+  benchmark_status?: Record<string, ApiBenchmarkStatus>
 }
 
 /** One program's downstream export outcome (present only when the backend's

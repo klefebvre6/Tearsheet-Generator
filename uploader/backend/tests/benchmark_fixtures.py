@@ -42,3 +42,32 @@ def seed_standard_benchmark_window(cache_dir: Path, anchor_monday: date) -> None
     write_daily_closes(cache_dir, "SPX", rows_spx)
     write_daily_closes(cache_dir, "NDX", rows_ndx)
     write_daily_closes(cache_dir, "BTC", rows_btc)
+
+
+def seed_equity_and_btc_calendar(
+    cache_dir: Path,
+    start: date,
+    end: date,
+    *,
+    holiday: date | None = None,
+) -> None:
+    """Weekday SPX/NDX closes plus every-day BTC closes through ``end``.
+
+    ``holiday`` if set is omitted from equity caches so alignment must use the
+    bounded prior close. BTC still has a same-date close that day.
+    """
+    rows_spx: list[tuple[date, float]] = []
+    rows_ndx: list[tuple[date, float]] = []
+    rows_btc: list[tuple[date, float]] = []
+    d = start
+    i = 0
+    while d <= end:
+        rows_btc.append((d, 60000.0 + i * 50))
+        if d.weekday() < 5 and d != holiday:
+            rows_spx.append((d, 5000.0 + i * 5))
+            rows_ndx.append((d, 18000.0 + i * 8))
+        d += timedelta(days=1)
+        i += 1
+    write_daily_closes(cache_dir, "SPX", rows_spx)
+    write_daily_closes(cache_dir, "NDX", rows_ndx)
+    write_daily_closes(cache_dir, "BTC", rows_btc)
